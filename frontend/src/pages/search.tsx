@@ -182,9 +182,6 @@ export default function SearchPage() {
                 Next
               </button>
             </div>
-            <p className="search-sidebar-pagination-note">
-              Page {visibleCurrentPage} of {visibleTotalPages}
-            </p>
           </div>
         </aside>
 

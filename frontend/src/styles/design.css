@@ -1071,13 +1071,6 @@ body {
     cursor: default;
 }
 
-.search-sidebar-pagination-note {
-    margin-top: 12px;
-    font-size: 12px;
-    line-height: 1.5;
-    color: var(--sp-muted);
-}
-
 .search-results-panel {
     padding: 60px 0 120px;
 }
