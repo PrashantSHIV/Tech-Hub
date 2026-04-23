@@ -59,11 +59,11 @@ body {
 .site-logo {
     display: inline-flex;
     align-items: center;
-    font-family: 'Fraunces', 'Cormorant Garamond', Georgia, serif;
-    font-weight: 500;
+    font-family: 'Indie Flower', cursive;
+    font-weight: 600;
     font-size: 30px;
     line-height: 1;
-    letter-spacing: -0.03em;
+    letter-spacing: 0;
     color: #1a1a1a;
     text-decoration: none;
 }
