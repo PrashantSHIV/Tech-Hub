@@ -74,6 +74,18 @@ body {
     gap: 28px;
 }
 
+/* spacer used when logo is removed to keep header layout */
+.site-logo-spacer {
+    width: 160px;
+    height: 100%;
+}
+
+@media (max-width: 768px) {
+    .site-logo-spacer {
+        width: 120px;
+    }
+}
+
 .site-nav-link {
     display: inline-flex;
     align-items: center;

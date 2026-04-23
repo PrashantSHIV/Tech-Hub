@@ -157,11 +157,7 @@ export default function SearchPage() {
             </div>
           </div>
 
-          <div className="search-sidebar-block search-sidebar-summary">
-            <span className="search-sidebar-label">Total Results</span>
-            <strong>{total}</strong>
-            <p>{isLoading ? 'Refreshing results...' : activeCategory === 'All' ? 'Across all topics' : `Filtered by ${activeCategory}`}</p>
-          </div>
+          {/* total results moved to top-right of results panel */}
 
           <div className="search-sidebar-block search-sidebar-pagination">
             <div className="search-sidebar-row">
@@ -193,6 +189,14 @@ export default function SearchPage() {
         </aside>
 
         <section className="search-results-panel">
+          <div className="search-results-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+            <div style={{ color: '#6b6b6b', fontSize: '13px' }}>
+              {isLoading ? 'Refreshing results...' : (activeCategory === 'All' ? 'Across all topics' : `Filtered by ${activeCategory}`)}
+            </div>
+            <div style={{ textAlign: 'right', color: '#6b6b6b', fontSize: '13px' }}>
+              <div style={{ fontWeight: 700, fontSize: '18px' }}>{total}</div>
+            </div>
+          </div>
           <div className="search-grid">
             {isLoading ? (
               <>
