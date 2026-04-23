@@ -1,0 +1,13 @@
+# Frontend build output
+frontend/.next/
+frontend/node_modules/
+
+# Backend build output and generated runtime files
+backend/*.exe
+backend/platform.db
+backend/gomodcache/
+backend/assets/avatars/
+
+# General
+.DS_Store
+Thumbs.db

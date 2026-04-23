@@ -4,21 +4,18 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/user/doc-platform/database"
 	"github.com/user/doc-platform/handlers"
 	"github.com/user/doc-platform/middleware"
-	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/time/rate"
 )
 
 func main() {
 	database.InitDB()
-	seedWriter()
 
 	r := gin.Default()
+	r.MaxMultipartMemory = 8 << 20
 
-	// CORS Middleware
 	r.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -33,11 +30,11 @@ func main() {
 		c.Next()
 	})
 
-	// Rate limiters
-	docLimiter := middleware.NewIPRateLimiter(rate.Limit(30), 30)          // 30 req/sec
-	commentLimiter := middleware.NewIPRateLimiter(rate.Limit(3.0/60.0), 3) // 3 req/min
+	r.Static("/assets/avatars", "./assets/avatars")
 
-	// Public Routes
+	docLimiter := middleware.NewIPRateLimiter(rate.Limit(30), 30)
+	commentLimiter := middleware.NewIPRateLimiter(rate.Limit(3.0/60.0), 3)
+
 	public := r.Group("/api")
 	{
 		public.GET("/docs", middleware.RateLimitMiddleware(docLimiter), handlers.GetDocuments)
@@ -46,79 +43,44 @@ func main() {
 		public.GET("/categories", handlers.GetCategories)
 		public.POST("/interactions", middleware.RateLimitMiddleware(commentLimiter), handlers.CreateInteraction)
 		public.POST("/login", handlers.Login)
+		public.POST("/password-reset/request", handlers.RequestPasswordReset)
+		public.POST("/password-reset/verify", handlers.VerifyPasswordResetOTP)
+		public.POST("/password-reset/confirm", handlers.ConfirmPasswordReset)
 	}
 
-	// Protected Routes (Writers only)
-	protected := r.Group("/api/admin")
-	protected.Use(middleware.AuthMiddleware())
+	authed := r.Group("/api")
+	authed.Use(middleware.AuthMiddleware())
 	{
-		protected.POST("/docs", handlers.CreateDocument)
-		protected.PUT("/docs/:id", handlers.UpdateDocument)
-		protected.DELETE("/docs/:id", handlers.DeleteDocument)
-		protected.POST("/comments/:id/approve", handlers.ApproveComment)
-		// Action logs can be added here
+		authed.GET("/avatars", handlers.ListAvatars)
+		authed.PUT("/me/avatar", handlers.UpdateMyAvatar)
+	}
+
+	adminDocs := r.Group("/api/admin")
+	adminDocs.Use(middleware.AuthMiddleware())
+	{
+		adminDocs.GET("/docs", handlers.GetManagedDocuments)
+		adminDocs.GET("/docs/:id", handlers.GetManagedDocument)
+		adminDocs.POST("/docs", handlers.CreateDocument)
+		adminDocs.PUT("/docs/:id", handlers.UpdateDocument)
+		adminDocs.DELETE("/docs/:id", handlers.DeleteDocument)
+		adminDocs.POST("/comments/:id/approve", middleware.RequireRole("ADMIN"), handlers.ApproveComment)
+	}
+
+	adminOnly := r.Group("/api/admin")
+	adminOnly.Use(middleware.AuthMiddleware(), middleware.RequireRole("ADMIN"))
+	{
+		adminOnly.GET("/users", handlers.ListUsers)
+		adminOnly.POST("/users", handlers.CreateUser)
+		adminOnly.PUT("/users/:id", handlers.UpdateUser)
+		adminOnly.DELETE("/users/:id", handlers.DeleteUser)
+
+		adminOnly.GET("/avatars", handlers.ListAvatars)
+		adminOnly.POST("/avatars", handlers.UploadAvatar)
+		adminOnly.DELETE("/avatars/:id", handlers.DeleteAvatar)
 	}
 
 	log.Println("Server starting on :8080")
-	r.Run(":8080")
-}
-
-func seedWriter() {
-	var count int
-	database.DB.QueryRow("SELECT COUNT(*) FROM writers").Scan(&count)
-	if count == 0 {
-		id := uuid.New().String()
-		password, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
-		_, err := database.DB.Exec("INSERT INTO writers (id, email, password) VALUES (?, ?, ?)", id, "admin@example.com", string(password))
-		if err != nil {
-			log.Println("Failed to seed writer:", err)
-		} else {
-			log.Println("Seeded default writer: admin@example.com / admin123")
-
-			// Seed sample documents
-			docs := []map[string]interface{}{
-				{
-					"title":       "Google OAuth 2.0 Integration",
-					"description": "Learn how to implement Google Login in your web application using the OAuth 2.0 protocol.",
-					"author":      "Aarav Mehta",
-					"category":    "Authentication",
-					"tags":        "Authentication",
-					"image":       "tech_minimalist_art.png",
-					"read_time":   "10 min read",
-					"content":     "Full content about OAuth 2.0...",
-				},
-				{
-					"title":       "How Access & Refresh Tokens Work",
-					"description": "A deep dive into token-based authentication, expiration, and silent renewal strategies.",
-					"author":      "Riya Sharma",
-					"category":    "Security",
-					"tags":        "Security",
-					"image":       "abstract_architecture_clean.png",
-					"read_time":   "8 min read",
-					"content":     "Full content about tokens...",
-				},
-				{
-					"title":       "Firebase Cloud Messaging Setup",
-					"description": "Complete guide to setting up push notifications for your web and mobile users.",
-					"author":      "Kabir Nanda",
-					"category":    "Cloud",
-					"tags":        "Cloud",
-					"image":       "nature_productivity_serene.png",
-					"read_time":   "9 min read",
-					"content":     "Full content about Firebase...",
-				},
-			}
-
-			for _, doc := range docs {
-				docID := uuid.New().String()
-				_, err := database.DB.Exec(
-					"INSERT INTO documents (id, title, description, content, author_id, author, category, tags, image, read_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-					docID, doc["title"], doc["description"], doc["content"], id, doc["author"], doc["category"], doc["tags"], doc["image"], doc["read_time"],
-				)
-				if err != nil {
-					log.Println("Failed to seed document:", err)
-				}
-			}
-		}
+	if err := r.Run(":8080"); err != nil {
+		log.Fatal("Failed to start server:", err)
 	}
 }

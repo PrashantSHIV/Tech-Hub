@@ -5,11 +5,13 @@ import (
 	"github.com/user/doc-platform/database"
 )
 
-func LogAction(writerID, action, details string) {
+func LogAction(userID, action, details string) {
 	id := uuid.New().String()
-	_, err := database.DB.Exec("INSERT INTO logs (id, writer_id, action, details) VALUES (?, ?, ?, ?)", id, writerID, action, details)
+	_, err := database.DB.Exec(
+		"INSERT INTO logs (id, user_id, action, details) VALUES ($1, $2, $3, $4)",
+		id, userID, action, details,
+	)
 	if err != nil {
-		// Log error to console, but don't stop the request
 		println("Failed to log action:", err.Error())
 	}
 }

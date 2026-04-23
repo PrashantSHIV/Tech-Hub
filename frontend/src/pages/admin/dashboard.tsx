@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import Header from '@/components/Header';
+import AdminNav from '@/components/AdminNav';
+import { apiRequest } from '@/lib/api';
+import { clearAuthSession, getAuthSession, type AuthUser } from '@/lib/auth';
 
 type DocRecord = {
   id: string;
@@ -13,13 +16,12 @@ type DocRecord = {
   author?: string;
   created_at?: string;
   updated_at?: string;
+  status?: 'DRAFT' | 'PUBLISHED';
 };
 
-type AuditLog = {
-  id: string;
-  action: string;
-  details: string;
-  created_at: string;
+type DocsResponse = {
+  docs: DocRecord[];
+  total: number;
 };
 
 const formatDate = (value?: string) => {
@@ -41,46 +43,37 @@ const getDocTopics = (doc: DocRecord) => {
   return Array.from(new Set([doc.category, ...tags].filter(Boolean))) as string[];
 };
 
-const getLatestDocDate = (docs: DocRecord[]) => {
-  const timestamps = docs
-    .map((doc) => new Date(doc.updated_at || doc.created_at || '').getTime())
-    .filter((value) => !Number.isNaN(value));
-
-  if (timestamps.length === 0) return undefined;
-  return new Date(Math.max(...timestamps)).toISOString();
-};
-
 export default function Dashboard() {
-  const [docs, setDocs] = useState<DocRecord[]>([]);
-  const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [docs, setDocs] = useState<DocRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
+    const session = getAuthSession();
+    if (!session) {
       void router.push('/login');
       return;
     }
 
-    void fetchData();
+    setUser(session.user);
+    void fetchDocuments(session.token, session.user);
   }, [router]);
 
-  const fetchData = async () => {
+  const fetchDocuments = async (token: string, authUser: AuthUser) => {
+    setLoading(true);
+    setError('');
+
     try {
-      const resDocs = await fetch('http://localhost:8080/api/docs');
-      if (!resDocs.ok) throw new Error('Failed to fetch docs');
-
-      const docsData = await resDocs.json();
-      const docsArray = Array.isArray(docsData) ? docsData : (docsData.docs || []);
-      setDocs(docsArray);
-
-      setLogs([
-        { id: '1', action: 'LOGIN', details: 'Logged in', created_at: '2026-04-22 10:00' },
-        { id: '2', action: 'CREATE_DOC', details: 'Created OAuth Guide', created_at: '2026-04-22 10:30' },
-      ]);
+      const query =
+        authUser.role === 'ADMIN'
+          ? '/api/admin/docs?scope=all&limit=50'
+          : '/api/admin/docs?limit=50';
+      const response = await apiRequest<DocsResponse>(query, { token });
+      setDocs(response.docs || []);
     } catch (err) {
-      console.error(err);
+      setError(err instanceof Error ? err.message : 'Failed to load documents');
       setDocs([]);
     } finally {
       setLoading(false);
@@ -88,72 +81,90 @@ export default function Dashboard() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this document?')) return;
+    const session = getAuthSession();
+    if (!session) {
+      void router.push('/login');
+      return;
+    }
+
+    if (!window.confirm('Delete this documentation entry?')) {
+      return;
+    }
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:8080/api/admin/docs/${id}`, {
+      await apiRequest<{ message: string }>(`/api/admin/docs/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        token: session.token,
       });
 
-      if (res.ok) {
-        await fetchData();
-      }
+      await fetchDocuments(session.token, session.user);
     } catch (err) {
-      alert('Failed to delete');
+      window.alert(err instanceof Error ? err.message : 'Failed to delete document');
     }
   };
 
-  const latestDocDate = getLatestDocDate(docs);
-  const uniqueTopics = new Set(docs.flatMap((doc) => getDocTopics(doc))).size;
+  const handleLogout = () => {
+    clearAuthSession();
+    void router.push('/login');
+  };
+
+  const summary = useMemo(() => {
+    const published = docs.filter((doc) => doc.status === 'PUBLISHED').length;
+    const drafts = docs.filter((doc) => doc.status === 'DRAFT').length;
+    const topics = new Set(docs.flatMap((doc) => getDocTopics(doc))).size;
+    const latestTimestamp = docs
+      .map((doc) => new Date(doc.updated_at || doc.created_at || '').getTime())
+      .filter((value) => !Number.isNaN(value));
+
+    return {
+      published,
+      drafts,
+      topics,
+      latest:
+        latestTimestamp.length > 0
+          ? formatDate(new Date(Math.max(...latestTimestamp)).toISOString())
+          : 'No updates yet',
+    };
+  }, [docs]);
 
   return (
-    <div
-      className="admin-dashboard-page"
-      style={{
-        minHeight: '100vh',
-        background: '#fff',
-        color: '#1a1a1a',
-        '--sp-border': '#f0f0f0',
-        '--sp-accent': '#191919',
-        '--sp-text': '#1a1a1a',
-        '--sp-sans': 'Inter, sans-serif',
-      } as React.CSSProperties}
-    >
+    <div className="admin-dashboard-page">
       <Head>
         <title>Writer Dashboard | Tech Hobby</title>
-        <link
-          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap"
-          rel="stylesheet"
-        />
       </Head>
 
       <Header />
 
       <main className="admin-dashboard-shell">
+        <AdminNav current="dashboard" role={user?.role} />
+
         <header className="admin-dashboard-header">
           <div className="admin-dashboard-intro">
             <span className="admin-dashboard-kicker">Editorial Workspace</span>
-            <h1>Writer Dashboard</h1>
+            <h1>{user?.role === 'ADMIN' ? 'Admin Dashboard' : 'Writer Dashboard'}</h1>
             <p>
-              Review published guides, update technical references, and keep the documentation
-              catalog current.
+              {user?.role === 'ADMIN'
+                ? 'Manage your team, curated avatars, and every draft or published note in one editorial workspace.'
+                : 'Create, refine, and publish your own documentation while keeping your profile and avatar selection current.'}
             </p>
           </div>
 
           <dl className="admin-dashboard-summary">
             <div className="admin-dashboard-summary-item">
-              <dt>Published</dt>
-              <dd>{docs.length} {docs.length === 1 ? 'guide' : 'guides'}</dd>
+              <dt>Role</dt>
+              <dd>{user?.role ?? 'Loading'}</dd>
             </div>
             <div className="admin-dashboard-summary-item">
-              <dt>Topics</dt>
-              <dd>{uniqueTopics} tracked labels</dd>
+              <dt>Published</dt>
+              <dd>{summary.published} live notes</dd>
+            </div>
+            <div className="admin-dashboard-summary-item">
+              <dt>Drafts</dt>
+              <dd>{summary.drafts} in progress</dd>
             </div>
             <div className="admin-dashboard-summary-item">
               <dt>Latest Update</dt>
-              <dd>{latestDocDate ? formatDate(latestDocDate) : 'No updates yet'}</dd>
+              <dd>{summary.latest}</dd>
             </div>
           </dl>
         </header>
@@ -162,20 +173,29 @@ export default function Dashboard() {
           <section className="admin-dashboard-main">
             <div className="admin-dashboard-section-head">
               <div>
-                <span className="admin-dashboard-label">Your Documentation</span>
-                <h2>{docs.length} published {docs.length === 1 ? 'guide' : 'guides'}</h2>
+                <span className="admin-dashboard-label">
+                  {user?.role === 'ADMIN' ? 'All Documentation' : 'Your Documentation'}
+                </span>
+                <h2>{docs.length} tracked {docs.length === 1 ? 'entry' : 'entries'}</h2>
               </div>
-              <span className="admin-dashboard-meta">Curated for Tech Hobby readers</span>
+              <span className="admin-dashboard-meta">
+                {summary.topics} active {summary.topics === 1 ? 'topic' : 'topics'}
+              </span>
             </div>
 
             {loading ? (
-              <div className="admin-dashboard-empty">Loading dashboard...</div>
+              <div className="admin-dashboard-empty">Loading workspace...</div>
+            ) : error ? (
+              <div className="admin-dashboard-empty">
+                <h3>Dashboard unavailable</h3>
+                <p>{error}</p>
+              </div>
             ) : docs.length === 0 ? (
               <div className="admin-dashboard-empty">
                 <h3>No documentation yet</h3>
-                <p>Start a new guide to populate your editorial dashboard.</p>
+                <p>Start a new document to populate the editorial workspace.</p>
                 <Link href="/admin/editor" className="admin-dashboard-primary-link">
-                  Create your first doc
+                  Open editor
                 </Link>
               </div>
             ) : (
@@ -187,12 +207,16 @@ export default function Dashboard() {
                     <article key={doc.id} className="admin-doc-card">
                       <div className="admin-doc-card-main">
                         <div className="admin-doc-card-meta">
-                          <span>{doc.author || 'Admin'}</span>
+                          <span>{doc.author || 'Unknown author'}</span>
                           <span>{formatDate(doc.updated_at || doc.created_at)}</span>
+                          <span className={`admin-doc-status is-${(doc.status || 'DRAFT').toLowerCase()}`}>
+                            {doc.status || 'DRAFT'}
+                          </span>
                         </div>
                         <h3>{doc.title}</h3>
                         <p>
-                          {doc.description || 'Technical documentation entry ready for refinement and maintenance.'}
+                          {doc.description ||
+                            'Technical documentation entry ready for editing, review, and publication.'}
                         </p>
                         <div className="admin-doc-card-tags">
                           {topics.length > 0 ? (
@@ -229,23 +253,30 @@ export default function Dashboard() {
           <aside className="admin-dashboard-sidebar">
             <section className="admin-sidebar-section">
               <span className="admin-dashboard-label">Workspace</span>
-              <h3>Publishing Control</h3>
+              <h3>{user?.username || 'Editor'}</h3>
               <p>
-                Draft new technical guides, revise older documentation, and keep the catalog
-                consistent.
+                {user?.role === 'ADMIN'
+                  ? 'Admins can create and override any document, manage users, and curate the avatar library.'
+                  : 'Members can create and manage their own notes, then pick a curated avatar for their profile.'}
               </p>
               <div className="admin-sidebar-actions">
                 <Link href="/admin/editor" className="admin-sidebar-link is-primary">
                   Create New Doc
                 </Link>
-                <button
-                  type="button"
-                  onClick={() => {
-                    localStorage.removeItem('token');
-                    void router.push('/login');
-                  }}
-                  className="admin-sidebar-link"
-                >
+                <Link href="/admin/profile" className="admin-sidebar-link">
+                  Edit Profile
+                </Link>
+                {user?.role === 'ADMIN' ? (
+                  <>
+                    <Link href="/admin/users" className="admin-sidebar-link">
+                      Manage Users
+                    </Link>
+                    <Link href="/admin/avatars" className="admin-sidebar-link">
+                      Manage Avatar Library
+                    </Link>
+                  </>
+                ) : null}
+                <button type="button" onClick={handleLogout} className="admin-sidebar-link">
                   Logout
                 </button>
               </div>
@@ -256,36 +287,28 @@ export default function Dashboard() {
               <dl className="admin-sidebar-metrics">
                 <div>
                   <dt>Published</dt>
-                  <dd>{docs.length}</dd>
+                  <dd>{summary.published}</dd>
                 </div>
                 <div>
-                  <dt>Recent Actions</dt>
-                  <dd>{logs.length}</dd>
+                  <dt>Drafts</dt>
+                  <dd>{summary.drafts}</dd>
+                </div>
+                <div>
+                  <dt>Topics</dt>
+                  <dd>{summary.topics}</dd>
+                </div>
+                <div>
+                  <dt>Role</dt>
+                  <dd>{user?.role === 'ADMIN' ? 'A' : 'M'}</dd>
                 </div>
               </dl>
             </section>
 
             <section className="admin-sidebar-section">
-              <span className="admin-dashboard-label">Audit Log</span>
-              <h3>Recent Actions</h3>
-              <div className="admin-log-list">
-                {logs.map((log) => (
-                  <div key={log.id} className="admin-log-item">
-                    <div className="admin-log-topline">
-                      <span>{log.action.replace('_', ' ')}</span>
-                      <time>{formatDate(log.created_at)}</time>
-                    </div>
-                    <p>{log.details}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="admin-sidebar-section">
-              <span className="admin-dashboard-label">Editorial Focus</span>
+              <span className="admin-dashboard-label">Publishing Rules</span>
               <p>
-                Keep titles sharp, categories consistent, and update older guides before creating
-                overlapping content.
+                Draft notes stay private to their author and admins. Published notes flow to the
+                public documentation pages automatically.
               </p>
             </section>
           </aside>
