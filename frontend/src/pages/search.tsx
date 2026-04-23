@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Header from '@/components/Header';
+import { API_BASE_URL } from '@/lib/api';
 
 const SkeletonLoader = () => (
   <div className="search-skeleton">
@@ -24,6 +25,21 @@ const resolveDocImage = (image?: string, id?: string) => {
   if (/^https?:\/\//i.test(image)) return image;
   return `/${image.replace(/^\/+/, '')}`;
 };
+
+const resolveAuthorAvatar = (authorAvatar?: string, authorName?: string) => {
+  if (authorAvatar) {
+    return `${API_BASE_URL}${authorAvatar}`;
+  }
+
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName || 'Author')}&background=1a1a1a&color=fff`;
+};
+
+const toTitleCase = (value?: string) =>
+  (value || 'Author')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
 
 export default function SearchPage() {
   const router = useRouter();
@@ -226,11 +242,11 @@ export default function SearchPage() {
                       <div className="search-card-author">
                         <div className="search-card-avatar">
                           <img
-                            src={`https://ui-avatars.com/api/?name=${doc.author || 'Admin'}&background=1a1a1a&color=fff`}
-                            alt="author"
+                            src={resolveAuthorAvatar(doc.author_avatar, doc.author)}
+                            alt={doc.author || 'Author'}
                           />
                         </div>
-                        <span>{doc.author || 'Admin'}</span>
+                        <span>{toTitleCase(doc.author)}</span>
                       </div>
                       <div className="search-card-dates">
                         {doc.created_at && (

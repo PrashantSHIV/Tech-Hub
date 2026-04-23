@@ -224,11 +224,7 @@ export default function Editor() {
 
         <header className="admin-editor-topbar">
           <div className="admin-editor-topbar-main">
-            <Link href="/admin/dashboard" className="admin-editor-backlink">
-              Back to dashboard
-            </Link>
             <div className="admin-editor-heading">
-              <span className="admin-editor-kicker">Writing Workspace</span>
               <h1>{typeof id === 'string' ? 'Edit Documentation' : 'New Documentation'}</h1>
             </div>
           </div>

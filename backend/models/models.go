@@ -42,6 +42,7 @@ type Document struct {
 	ContentJSON json.RawMessage `json:"content_json,omitempty"`
 	AuthorID    string          `json:"author_id,omitempty"`
 	Author      string          `json:"author"`
+	AuthorAvatar string         `json:"author_avatar,omitempty"`
 	Tags        string          `json:"tags"`
 	Category    string          `json:"category"`
 	Image       string          `json:"image"`

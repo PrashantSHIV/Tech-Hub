@@ -295,7 +295,7 @@ func GetManagedDocument(c *gin.Context) {
 
 func GetCategories(c *gin.Context) {
 	rows, err := database.DB.Query(`
-		SELECT category, tags
+		SELECT category
 		FROM documents
 		WHERE status = 'PUBLISHED'
 	`)
@@ -308,20 +308,12 @@ func GetCategories(c *gin.Context) {
 	categorySet := map[string]struct{}{}
 	for rows.Next() {
 		var category sql.NullString
-		var tags sql.NullString
-		if err := rows.Scan(&category, &tags); err != nil {
+		if err := rows.Scan(&category); err != nil {
 			continue
 		}
 
 		if category.Valid && strings.TrimSpace(category.String) != "" {
 			categorySet[strings.TrimSpace(category.String)] = struct{}{}
-		}
-
-		for _, tag := range strings.Split(tags.String, ",") {
-			trimmed := strings.TrimSpace(tag)
-			if trimmed != "" {
-				categorySet[trimmed] = struct{}{}
-			}
 		}
 	}
 
@@ -348,8 +340,10 @@ func queryDocuments(options documentQueryOptions) ([]models.Document, int, int, 
 
 	countQuery := "SELECT COUNT(*) FROM documents WHERE 1=1"
 	dataQuery := `
-		SELECT id, title, description, author_id, author_name, category, tags, content_json, status, image, read_time, created_at, updated_at
+		SELECT documents.id, documents.title, documents.description, documents.author_id, documents.author_name, COALESCE(avatar_library.path, '') AS author_avatar, documents.category, documents.tags, documents.content_json, documents.status, documents.image, documents.read_time, documents.created_at, documents.updated_at
 		FROM documents
+		LEFT JOIN users ON documents.author_id = users.id
+		LEFT JOIN avatar_library ON users.selected_avatar_id = avatar_library.id
 		WHERE 1=1
 	`
 	args := []interface{}{}
@@ -431,9 +425,11 @@ func queryDocuments(options documentQueryOptions) ([]models.Document, int, int, 
 
 func fetchDocumentByID(id string) (models.Document, error) {
 	row := database.DB.QueryRow(`
-		SELECT id, title, description, author_id, author_name, category, tags, content_json, status, image, read_time, created_at, updated_at
+		SELECT documents.id, documents.title, documents.description, documents.author_id, documents.author_name, COALESCE(avatar_library.path, '') AS author_avatar, documents.category, documents.tags, documents.content_json, documents.status, documents.image, documents.read_time, documents.created_at, documents.updated_at
 		FROM documents
-		WHERE id = $1
+		LEFT JOIN users ON documents.author_id = users.id
+		LEFT JOIN avatar_library ON users.selected_avatar_id = avatar_library.id
+		WHERE documents.id = $1
 	`, id)
 
 	return scanDocument(row)
@@ -451,6 +447,7 @@ func scanDocument(scanner documentScanner) (models.Document, error) {
 		&doc.Description,
 		&doc.AuthorID,
 		&doc.Author,
+		&doc.AuthorAvatar,
 		&doc.Category,
 		&doc.Tags,
 		&doc.ContentJSON,

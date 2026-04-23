@@ -7,6 +7,7 @@ backend/*.exe
 backend/platform.db
 backend/gomodcache/
 backend/assets/avatars/
+backend/.gocache/
 
 # General
 .DS_Store

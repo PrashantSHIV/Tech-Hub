@@ -4,6 +4,7 @@ import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import Head from 'next/head';
 import Header from '@/components/Header';
+import { API_BASE_URL } from '@/lib/api';
 
 export default function DocDetail() {
   const router = useRouter();
@@ -106,6 +107,18 @@ export default function DocDetail() {
   };
 
   const headings = doc ? extractHeadings(doc.content) : [];
+  const authorAvatarSrc = doc?.author_avatar
+    ? `${API_BASE_URL}${doc.author_avatar}`
+    : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(doc?.author || 'Author') + '&background=f3f4f6&color=111827';
+  const authorDisplayName = toTitleCase(doc?.author || 'Author');
+  const categoryItems = (doc?.category || '')
+    .split(',')
+    .map((item: string) => item.trim())
+    .filter(Boolean);
+  const tagItems = (doc?.tags || '')
+    .split(',')
+    .map((item: string) => item.trim())
+    .filter(Boolean);
 
   useEffect(() => {
     if (!doc) return;
@@ -270,15 +283,15 @@ export default function DocDetail() {
                   border: '1px solid #eee',
                   overflow: 'hidden'
                 }}>
-                  <img 
-                    src="https://cdn.dribbble.com/userupload/15513631/file/original-5bcae1f588c45e3ce423136072afe2a8.jpg?format=webp&resize=400x300&vertical=center" 
-                    alt="avatar" 
+                  <img
+                    src={authorAvatarSrc}
+                    alt={doc.author || 'Author avatar'}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 </div>
                 <div>
                   <span style={{ fontSize: '10px', color: '#888', textTransform: 'uppercase', display: 'block', fontWeight: '700', letterSpacing: '0.5px', marginBottom: '2px' }}>Author</span>
-                  <span style={{ fontSize: '14px', fontWeight: '700', color: '#1a1a1a' }}>{doc.author || 'Admin'}</span>
+                  <span style={{ fontSize: '14px', fontWeight: '700', color: '#1a1a1a' }}>{authorDisplayName}</span>
                 </div>
               </div>
               
@@ -343,14 +356,8 @@ export default function DocDetail() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <span style={{ fontSize: '10px', color: '#888', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.8px' }}>Categories</span>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {[
-                      doc.category,
-                      ...(doc.tags ? doc.tags.split(',').map((t: string) => t.trim()) : [])
-                    ].filter(Boolean).length > 0 ? (
-                      [
-                        doc.category,
-                        ...(doc.tags ? doc.tags.split(',').map((t: string) => t.trim()) : [])
-                      ].filter(Boolean).map((tag, idx) => (
+                    {categoryItems.length > 0 ? (
+                      categoryItems.map((tag, idx) => (
                         <span key={idx} style={{ 
                           background: '#f5f5f5', 
                           color: '#1a1a1a', 
@@ -365,6 +372,29 @@ export default function DocDetail() {
                       ))
                     ) : (
                       <span style={{ fontSize: '11px', color: '#bbb', fontStyle: 'italic' }}>Uncategorized</span>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <span style={{ fontSize: '10px', color: '#888', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.8px' }}>Tags</span>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {tagItems.length > 0 ? (
+                      tagItems.map((tag, idx) => (
+                        <span key={idx} style={{ 
+                          background: '#f5f5f5', 
+                          color: '#1a1a1a', 
+                          padding: '4px 12px', 
+                          borderRadius: '6px', 
+                          fontSize: '11px', 
+                          fontWeight: '600',
+                          border: '1px solid #eee'
+                        }}>
+                          {tag}
+                        </span>
+                      ))
+                    ) : (
+                      <span style={{ fontSize: '11px', color: '#bbb', fontStyle: 'italic' }}>No tags</span>
                     )}
                   </div>
                 </div>
@@ -491,20 +521,20 @@ export default function DocDetail() {
             </div>
           </article>
 
-          <footer style={{ marginTop: '80px', paddingTop: '60px', borderTop: '1px solid #f0f0f0', fontFamily: 'Inter, sans-serif' }}>
+          <footer style={{ marginTop: '56px', paddingTop: '40px', borderTop: '1px solid #f0f0f0', fontFamily: 'Inter, sans-serif' }}>
             <section className="feedback">
-              <div style={{ textAlign: 'center', marginBottom: '60px' }}>
+              <div style={{ textAlign: 'center', marginBottom: '36px' }}>
                 <h3 style={{ 
                   fontFamily: "'Plus Jakarta Sans', sans-serif", 
-                  fontSize: '32px', 
+                  fontSize: '22px', 
                   fontWeight: '800', 
                   color: '#1a1a1a', 
-                  letterSpacing: '-1px', 
-                  marginBottom: '12px' 
+                  letterSpacing: '-0.6px', 
+                  marginBottom: '8px' 
                 }}>
                   Share your expertise.
                 </h3>
-                <p style={{ fontSize: '16px', color: '#666', maxWidth: '600px', margin: '0 auto' }}>
+                <p style={{ fontSize: '14px', color: '#666', maxWidth: '560px', margin: '0 auto', lineHeight: '1.6' }}>
                   Your feedback helps us refine these guides for the entire technical community.
                 </p>
               </div>
@@ -512,12 +542,12 @@ export default function DocDetail() {
               {msg && (
                 <div style={{ 
                   maxWidth: '720px', 
-                  margin: '0 auto 40px',
+                  margin: '0 auto 28px',
                   background: '#f8fafc', 
-                  padding: '16px 24px', 
-                  borderRadius: '12px', 
+                  padding: '12px 18px', 
+                  borderRadius: '10px', 
                   color: '#475569', 
-                  fontSize: '14px', 
+                  fontSize: '13px', 
                   border: '1px solid #e2e8f0', 
                   fontWeight: '600',
                   display: 'flex',
@@ -532,10 +562,10 @@ export default function DocDetail() {
               <div style={{ 
                 display: 'grid', 
                 gridTemplateColumns: '1fr 1fr', 
-                gap: '64px', 
+                gap: '40px', 
                 alignItems: 'start',
-                maxWidth: '1240px',
-                margin: '0 auto 80px'
+                maxWidth: '1120px',
+                margin: '0 auto 48px'
               }}>
                 {/* Left: Feedback Input */}
                 <div style={{ 
@@ -553,14 +583,14 @@ export default function DocDetail() {
                       onClick={() => setFeedbackTab('review')}
                       style={{ 
                         flex: 1, 
-                        padding: '16px', 
+                        padding: '13px', 
                         background: feedbackTab === 'review' ? '#fff' : '#fcfcfc',
                         border: 'none',
                         borderRight: '1px solid #f0f0f0',
-                        fontSize: '11px',
+                        fontSize: '10px',
                         fontWeight: '800',
                         textTransform: 'uppercase',
-                        letterSpacing: '1px',
+                        letterSpacing: '0.9px',
                         color: feedbackTab === 'review' ? '#1a1a1a' : '#888',
                         cursor: 'pointer',
                         transition: 'all 0.2s ease',
@@ -573,13 +603,13 @@ export default function DocDetail() {
                       onClick={() => setFeedbackTab('suggestion')}
                       style={{ 
                         flex: 1, 
-                        padding: '16px', 
+                        padding: '13px', 
                         background: feedbackTab === 'suggestion' ? '#fff' : '#fcfcfc',
                         border: 'none',
-                        fontSize: '11px',
+                        fontSize: '10px',
                         fontWeight: '800',
                         textTransform: 'uppercase',
-                        letterSpacing: '1px',
+                        letterSpacing: '0.9px',
                         color: feedbackTab === 'suggestion' ? '#1a1a1a' : '#888',
                         cursor: 'pointer',
                         transition: 'all 0.2s ease',
@@ -591,17 +621,17 @@ export default function DocDetail() {
                   </div>
 
                   {/* Form Area */}
-                  <div style={{ padding: '32px' }}>
+                  <div style={{ padding: '22px' }}>
                     {feedbackTab === 'review' ? (
                       <div>
-                        <div style={{ display: 'flex', gap: '6px', marginBottom: '24px', justifyContent: 'center' }}>
+                        <div style={{ display: 'flex', gap: '6px', marginBottom: '18px', justifyContent: 'center' }}>
                           {[1, 2, 3, 4, 5].map(s => (
                             <span 
                               key={s} 
                               onClick={() => setStars(s)} 
                               style={{ 
                                 cursor: 'pointer', 
-                                fontSize: '28px', 
+                                fontSize: '24px', 
                                 color: s <= stars ? '#1a1a1a' : '#e0e0e0', 
                                 transition: 'all 0.2s ease'
                               }}
@@ -612,15 +642,15 @@ export default function DocDetail() {
                           placeholder="What did you think of this guide?"
                           style={{ 
                             width: '100%', 
-                            padding: '20px', 
+                            padding: '16px', 
                             borderRadius: '8px', 
                             border: '1px solid #f0f0f0', 
-                            fontSize: '14px', 
-                            height: '160px', 
+                            fontSize: '13px', 
+                            height: '124px', 
                             outline: 'none', 
                             resize: 'none', 
                             background: '#fcfcfc', 
-                            marginBottom: '20px', 
+                            marginBottom: '16px', 
                             fontFamily: 'Inter, sans-serif',
                             lineHeight: '1.6'
                           }}
@@ -630,29 +660,29 @@ export default function DocDetail() {
                         <button 
                           onClick={() => handleSubmitFeedback('comment')} 
                           className="btn-black" 
-                          style={{ width: '100%', padding: '16px', borderRadius: '8px', fontSize: '14px', fontWeight: '700' }}
+                          style={{ width: '100%', padding: '13px', borderRadius: '8px', fontSize: '13px', fontWeight: '700' }}
                         >
                           Submit Review
                         </button>
                       </div>
                     ) : (
                       <div>
-                        <p style={{ fontSize: '13px', color: '#666', marginBottom: '20px', textAlign: 'center' }}>
+                        <p style={{ fontSize: '12px', color: '#666', marginBottom: '16px', textAlign: 'center', lineHeight: '1.6' }}>
                           Notice a typo or have a technical correction? Send it to our editorial team.
                         </p>
                         <textarea 
                           placeholder="Suggest a correction..."
                           style={{ 
                             width: '100%', 
-                            padding: '20px', 
+                            padding: '16px', 
                             borderRadius: '8px', 
                             border: '1px solid #f0f0f0', 
-                            fontSize: '14px', 
-                            height: '160px', 
+                            fontSize: '13px', 
+                            height: '124px', 
                             outline: 'none', 
                             resize: 'none', 
                             background: '#fcfcfc', 
-                            marginBottom: '20px', 
+                            marginBottom: '16px', 
                             fontFamily: 'Inter, sans-serif',
                             lineHeight: '1.6'
                           }}
@@ -664,9 +694,9 @@ export default function DocDetail() {
                           className="btn-black" 
                           style={{ 
                             width: '100%', 
-                            padding: '16px', 
+                            padding: '13px', 
                             borderRadius: '8px', 
-                            fontSize: '14px', 
+                            fontSize: '13px', 
                             fontWeight: '700',
                             background: '#fff',
                             color: '#1a1a1a',
@@ -682,14 +712,14 @@ export default function DocDetail() {
 
                 {/* Right: Approved Comments List */}
                 <div style={{ maxHeight: '720px', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', flexShrink: 0 }}>
                     <h4 style={{ fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px', color: '#1a1a1a' }}>Reader Comments</h4>
                     <div style={{ flex: 1, height: '1px', background: '#f0f0f0' }}></div>
                   </div>
 
                   {comments.length === 0 ? (
-                    <div style={{ padding: '40px', textAlign: 'center', background: '#fcfcfc', borderRadius: '8px', border: '1px dashed #f0f0f0' }}>
-                      <p style={{ color: '#999', fontSize: '14px', fontStyle: 'italic' }}>No comments yet.</p>
+                    <div style={{ padding: '28px', textAlign: 'center', background: '#fcfcfc', borderRadius: '8px', border: '1px dashed #f0f0f0' }}>
+                      <p style={{ color: '#999', fontSize: '13px', fontStyle: 'italic' }}>No comments yet.</p>
                     </div>
                   ) : (
                     <div style={{ 
@@ -723,4 +753,12 @@ export default function DocDetail() {
       </div>
     </div>
   );
+}
+
+function toTitleCase(value: string) {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
 }
