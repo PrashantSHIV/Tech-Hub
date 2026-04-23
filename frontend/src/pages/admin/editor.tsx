@@ -1,28 +1,43 @@
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
+import React, { useEffect, useState } from 'react';
+import Head from 'next/head';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
+import ReactMarkdown from 'react-markdown';
+import Header from '@/components/Header';
+
+type DocForm = {
+  title: string;
+  description: string;
+  content: string;
+  tags: string;
+  author: string;
+  category: string;
+  image: string;
+  readTime: string;
+};
+
+const initialDoc: DocForm = {
+  title: '',
+  description: '',
+  content: '',
+  tags: '',
+  author: '',
+  category: '',
+  image: '',
+  readTime: '',
+};
 
 export default function Editor() {
-  const [doc, setDoc] = useState({ 
-    title: "", 
-    description: "", 
-    content: "", 
-    tags: "",
-    author: "",
-    category: "",
-    image: "",
-    readTime: ""
-  });
+  const [doc, setDoc] = useState<DocForm>(initialDoc);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { id } = router.query;
 
   useEffect(() => {
     if (id) {
-      // Fetch existing doc if editing
       fetch(`http://localhost:8080/api/docs/${id}`)
-        .then(res => res.json())
-        .then(data => setDoc(data));
+        .then((res) => res.json())
+        .then((data) => setDoc({ ...initialDoc, ...data }));
     }
   }, [id]);
 
@@ -35,111 +50,196 @@ export default function Editor() {
     try {
       const res = await fetch(url, {
         method,
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(doc)
+        body: JSON.stringify(doc),
       });
 
       if (res.ok) {
-        router.push('/admin/dashboard');
+        void router.push('/admin/dashboard');
       } else {
-        alert("Failed to save document");
+        alert('Failed to save document');
       }
     } catch (err) {
-      alert("Error saving document");
+      alert('Error saving document');
     } finally {
       setLoading(false);
     }
   };
 
+  const setField = (field: keyof DocForm, value: string) => {
+    setDoc((current) => ({ ...current, [field]: value }));
+  };
+
   return (
-    <div style={{ padding: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <Link href="/admin/dashboard" style={{ textDecoration: 'none', color: '#666' }}>← Back</Link>
-          <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: '24px' }}>{id ? "Edit" : "New"} Documentation</h1>
-        </div>
-        <button onClick={handleSave} disabled={loading} className="btn-black">
-          {loading ? "Saving..." : "Publish Document"}
-        </button>
-      </div>
+    <div
+      className="admin-editor-page"
+      style={{
+        minHeight: '100vh',
+        background: '#fff',
+        color: '#1a1a1a',
+        '--sp-border': '#f0f0f0',
+        '--sp-accent': '#191919',
+        '--sp-text': '#1a1a1a',
+        '--sp-sans': 'Inter, sans-serif',
+      } as React.CSSProperties}
+    >
+      <Head>
+        <title>{id ? 'Edit Documentation' : 'New Documentation'} | Tech Hobby</title>
+        <link
+          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap"
+          rel="stylesheet"
+        />
+      </Head>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', height: 'calc(100vh - 120px)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', overflowY: 'auto' }}>
-          <input 
-            type="text" 
-            placeholder="Document Title" 
-            style={{ fontSize: '32px', fontWeight: 'bold', border: 'none', outline: 'none', borderBottom: '1px solid #eee', padding: '10px 0' }}
-            value={doc.title}
-            onChange={(e) => setDoc({...doc, title: e.target.value})}
-          />
-          <input 
-            type="text" 
-            placeholder="Short description..." 
-            style={{ fontSize: '18px', border: 'none', outline: 'none', borderBottom: '1px solid #eee', padding: '10px 0', color: '#666' }}
-            value={doc.description}
-            onChange={(e) => setDoc({...doc, description: e.target.value})}
-          />
+      <Header />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <input 
-              type="text" 
-              placeholder="Author Name" 
-              style={{ fontSize: '14px', border: '1px solid #eee', outline: 'none', padding: '10px', borderRadius: '4px' }}
-              value={doc.author}
-              onChange={(e) => setDoc({...doc, author: e.target.value})}
-            />
-            <input 
-              type="text" 
-              placeholder="Category" 
-              style={{ fontSize: '14px', border: '1px solid #eee', outline: 'none', padding: '10px', borderRadius: '4px' }}
-              value={doc.category}
-              onChange={(e) => setDoc({...doc, category: e.target.value})}
-            />
+      <main className="admin-editor-shell">
+        <header className="admin-editor-topbar">
+          <div className="admin-editor-topbar-main">
+            <Link href="/admin/dashboard" className="admin-editor-backlink">
+              Back
+            </Link>
+            <div className="admin-editor-heading">
+              <span className="admin-editor-kicker">Writing Workspace</span>
+              <h1>{id ? 'Edit Documentation' : 'New Documentation'}</h1>
+            </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <input 
-              type="text" 
-              placeholder="Image URL" 
-              style={{ fontSize: '14px', border: '1px solid #eee', outline: 'none', padding: '10px', borderRadius: '4px' }}
-              value={doc.image}
-              onChange={(e) => setDoc({...doc, image: e.target.value})}
-            />
-            <input 
-              type="text" 
-              placeholder="Read Time (e.g. 10 min read)" 
-              style={{ fontSize: '14px', border: '1px solid #eee', outline: 'none', padding: '10px', borderRadius: '4px' }}
-              value={doc.readTime}
-              onChange={(e) => setDoc({...doc, readTime: e.target.value})}
-            />
-          </div>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={loading}
+            className="admin-editor-publish"
+          >
+            {loading ? 'Saving...' : 'Publish Document'}
+          </button>
+        </header>
 
-          <input 
-            type="text" 
-            placeholder="Tags (comma separated)" 
-            style={{ fontSize: '14px', border: 'none', outline: 'none', borderBottom: '1px solid #eee', padding: '10px 0' }}
-            value={doc.tags}
-            onChange={(e) => setDoc({...doc, tags: e.target.value})}
-          />
-          <textarea 
-            placeholder="Write your technical documentation here (Markdown supported)..."
-            style={{ flex: 1, border: 'none', outline: 'none', fontSize: '16px', lineHeight: '1.6', fontFamily: 'var(--font-body)', resize: 'none' }}
-            value={doc.content}
-            onChange={(e) => setDoc({...doc, content: e.target.value})}
-          ></textarea>
-        </div>
+        <section className="admin-editor-layout">
+          <section className="admin-editor-form-column">
+            <div className="admin-editor-primary-fields">
+              <label className="admin-editor-field admin-editor-field-title">
+                <span>Title</span>
+                <input
+                  type="text"
+                  placeholder="Document title"
+                  value={doc.title}
+                  onChange={(e) => setField('title', e.target.value)}
+                />
+              </label>
 
-        <div style={{ borderLeft: '1px solid #eee', paddingLeft: '20px', overflowY: 'auto' }}>
-          <div style={{ color: '#aaa', fontSize: '12px', textTransform: 'uppercase', marginBottom: '10px' }}>Preview</div>
-          <div style={{ fontFamily: 'var(--font-body)', lineHeight: '1.6' }}>
-            <h1 style={{ fontSize: '40px', marginBottom: '20px' }}>{doc.title}</h1>
-            <div style={{ whiteSpace: 'pre-wrap' }}>{doc.content}</div>
-          </div>
-        </div>
-      </div>
+              <label className="admin-editor-field admin-editor-field-description">
+                <span>Description</span>
+                <textarea
+                  placeholder="Short summary for readers"
+                  value={doc.description}
+                  onChange={(e) => setField('description', e.target.value)}
+                  rows={3}
+                />
+              </label>
+            </div>
+
+            <div className="admin-editor-meta-grid">
+              <label className="admin-editor-field">
+                <span>Author</span>
+                <input
+                  type="text"
+                  placeholder="Author name"
+                  value={doc.author}
+                  onChange={(e) => setField('author', e.target.value)}
+                />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Category</span>
+                <input
+                  type="text"
+                  placeholder="Primary category"
+                  value={doc.category}
+                  onChange={(e) => setField('category', e.target.value)}
+                />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Image URL</span>
+                <input
+                  type="text"
+                  placeholder="Image URL"
+                  value={doc.image}
+                  onChange={(e) => setField('image', e.target.value)}
+                />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Read Time</span>
+                <input
+                  type="text"
+                  placeholder="10 min read"
+                  value={doc.readTime}
+                  onChange={(e) => setField('readTime', e.target.value)}
+                />
+              </label>
+
+              <label className="admin-editor-field admin-editor-field-full">
+                <span>Tags</span>
+                <input
+                  type="text"
+                  placeholder="TypeScript, JavaScript, Web Development"
+                  value={doc.tags}
+                  onChange={(e) => setField('tags', e.target.value)}
+                />
+              </label>
+            </div>
+
+            <section className="admin-editor-content-panel">
+              <div className="admin-editor-section-head">
+                <span className="admin-editor-kicker">Content</span>
+                <span className="admin-editor-section-note">Markdown supported</span>
+              </div>
+              <label className="admin-editor-field admin-editor-field-content">
+                <textarea
+                  placeholder="Write your technical documentation here..."
+                  value={doc.content}
+                  onChange={(e) => setField('content', e.target.value)}
+                />
+              </label>
+            </section>
+          </section>
+
+          <aside className="admin-editor-preview-column">
+            <div className="admin-editor-section-head">
+              <span className="admin-editor-kicker">Preview</span>
+              <span className="admin-editor-section-note">Live reading view</span>
+            </div>
+
+            <article className="admin-editor-preview">
+              <h1>{doc.title || 'Untitled document'}</h1>
+              {doc.description ? <p className="admin-editor-preview-description">{doc.description}</p> : null}
+
+              <div className="admin-editor-preview-meta">
+                {doc.author ? <span>{doc.author}</span> : null}
+                {doc.category ? <span>{doc.category}</span> : null}
+                {doc.readTime ? <span>{doc.readTime}</span> : null}
+              </div>
+
+              {doc.tags ? (
+                <div className="admin-editor-preview-tags">
+                  {doc.tags.split(',').map((tag) => tag.trim()).filter(Boolean).map((tag) => (
+                    <span key={tag}>{tag}</span>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="admin-editor-preview-body">
+                <ReactMarkdown>{doc.content || 'Start writing to preview the document here.'}</ReactMarkdown>
+              </div>
+            </article>
+          </aside>
+        </section>
+      </main>
     </div>
   );
 }
