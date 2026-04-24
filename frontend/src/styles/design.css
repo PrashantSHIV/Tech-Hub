@@ -2965,7 +2965,6 @@ body {
     overflow-y: auto;
     padding-right: 14px;
     scrollbar-gutter: stable;
-    overscroll-behavior: contain;
 }
 
 .admin-avatar-library-sidebar {
@@ -2979,7 +2978,6 @@ body {
     overflow-y: auto;
     padding-right: 14px;
     scrollbar-gutter: stable;
-    overscroll-behavior: contain;
 }
 
 .admin-categories-sidebar {
@@ -3015,7 +3013,6 @@ body {
     overflow-y: auto;
     padding-right: 14px;
     scrollbar-gutter: stable;
-    overscroll-behavior: contain;
 }
 
 .admin-users-sidebar {
@@ -3033,7 +3030,6 @@ body {
     overflow-y: auto;
     padding-right: 14px;
     scrollbar-gutter: stable;
-    overscroll-behavior: contain;
 }
 
 .admin-profile-sidebar {
