@@ -4,16 +4,19 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import Header from '@/components/Header';
 import AdminNav from '@/components/AdminNav';
-import { apiRequest } from '@/lib/api';
+import { API_BASE_URL, apiRequest } from '@/lib/api';
 import { getAuthSession, type AuthUser } from '@/lib/auth';
 
 type DocRecord = {
   id: string;
   title: string;
   description?: string;
+  image?: string;
   tags?: string;
   category?: string;
   author?: string;
+  author_avatar?: string;
+  readTime?: string;
   created_at?: string;
   updated_at?: string;
   status?: 'DRAFT' | 'PUBLISHED';
@@ -42,6 +45,27 @@ const getDocTopics = (doc: DocRecord) => {
 
   return Array.from(new Set([doc.category, ...tags].filter(Boolean))) as string[];
 };
+
+const resolveDocImage = (image?: string, id?: string) => {
+  if (!image) return `https://source.unsplash.com/featured/?technology,coding&sig=${id}`;
+  if (/^https?:\/\//i.test(image)) return image;
+  return `/${image.replace(/^\/+/, '')}`;
+};
+
+const resolveAuthorAvatar = (authorAvatar?: string, authorName?: string) => {
+  if (authorAvatar) {
+    return `${API_BASE_URL}${authorAvatar}`;
+  }
+
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName || 'Author')}&background=1a1a1a&color=fff`;
+};
+
+const toTitleCase = (value?: string) =>
+  (value || 'Author')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
 
 export default function Dashboard() {
   const router = useRouter();
@@ -167,8 +191,7 @@ export default function Dashboard() {
 
         <header className="admin-dashboard-header">
           <div className="admin-dashboard-intro">
-            <span className="admin-dashboard-kicker">Workspace</span>
-            <h2>{user?.role === 'ADMIN' ? 'Admin Dashboard' : 'Writer Dashboard'}</h2>
+            <h1>{user?.role === 'ADMIN' ? 'Admin Dashboard' : 'Writer Dashboard'}</h1>
             <p>
               {user?.role === 'ADMIN'
                 ? 'Manage your team, curated avatars, and every draft or published note in one editorial workspace.'
@@ -200,12 +223,11 @@ export default function Dashboard() {
           <section className="admin-dashboard-main">
             <div className="admin-dashboard-section-head">
               <label className="admin-dashboard-search">
-                <span className="admin-dashboard-search-label">Search</span>
                 <input
                   type="search"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search docs, authors, topics"
+                  placeholder="Search"
                 />
               </label>
               <div className="admin-dashboard-tools">
@@ -253,33 +275,56 @@ export default function Dashboard() {
             ) : (
               <div className="admin-doc-list">
                 {filteredDocs.map((doc) => {
-                  const topics = getDocTopics(doc);
-
                   return (
                     <article key={doc.id} className="admin-doc-card">
                       <Link href={`/admin/editor?id=${doc.id}`} className="admin-doc-card-main">
-                        <div className="admin-doc-card-meta">
-                          <span>{doc.author || 'Unknown author'}</span>
-                          <span>{formatDate(doc.updated_at || doc.created_at)}</span>
-                          <span className={`admin-doc-status is-${(doc.status || 'DRAFT').toLowerCase()}`}>
-                            {doc.status || 'DRAFT'}
-                          </span>
+                        <div className="admin-doc-card-media">
+                          <img
+                            src={resolveDocImage(doc.image, doc.id)}
+                            alt={doc.title}
+                            className="admin-doc-card-image"
+                          />
                         </div>
-                        <h3>{doc.title}</h3>
-                        <p>
-                          {doc.description ||
-                            'Technical documentation entry ready for editing, review, and publication.'}
-                        </p>
-                        <div className="admin-doc-card-tags">
-                          {topics.length > 0 ? (
-                            topics.slice(0, 4).map((topic) => (
-                              <span key={topic} className="admin-doc-chip">
-                                {topic}
+                        <div className="admin-doc-card-body">
+                          <div className="admin-doc-card-meta">
+                            <div className="admin-doc-card-meta-left">
+                              <span className="admin-doc-card-category">
+                                {doc.category || 'Article'}
                               </span>
-                            ))
-                          ) : (
-                            <span className="admin-doc-chip is-muted">Uncategorized</span>
-                          )}
+                              <span
+                                className={`admin-doc-status is-${(doc.status || 'DRAFT').toLowerCase()}`}
+                              >
+                                {doc.status || 'DRAFT'}
+                              </span>
+                            </div>
+                            <span className="admin-doc-card-readtime">
+                              {doc.readTime || '5 min read'}
+                            </span>
+                          </div>
+                          <h3>{doc.title}</h3>
+                          <p>
+                            {doc.description ||
+                              'Technical documentation entry ready for editing, review, and publication.'}
+                          </p>
+                          <div className="admin-doc-card-footer">
+                            <div className="admin-doc-card-author">
+                              <div className="admin-doc-card-avatar">
+                                <img
+                                  src={resolveAuthorAvatar(doc.author_avatar, doc.author)}
+                                  alt={doc.author || 'Author'}
+                                />
+                              </div>
+                              <span>{toTitleCase(doc.author)}</span>
+                            </div>
+                            <div className="admin-doc-card-dates">
+                              {doc.created_at ? (
+                                <span>Published: {formatDate(doc.created_at)}</span>
+                              ) : null}
+                              {doc.updated_at && doc.updated_at !== doc.created_at ? (
+                                <span>Updated: {formatDate(doc.updated_at)}</span>
+                              ) : null}
+                            </div>
+                          </div>
                         </div>
                       </Link>
 

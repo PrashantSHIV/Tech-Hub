@@ -3,9 +3,10 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import Header from '@/components/Header';
 import AdminNav from '@/components/AdminNav';
-import { apiRequest } from '@/lib/api';
+import { API_BASE_URL, apiRequest } from '@/lib/api';
 import { getAuthSession, type AuthUser } from '@/lib/auth';
 import {
   createImageRowBlock,
@@ -33,6 +34,14 @@ type ManagedDocumentResponse = EditorDoc & {
   content?: string;
   content_json?: unknown;
   author?: string;
+  author_avatar?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type CategoryRecord = {
+  id: string;
+  name: string;
 };
 
 type FeedbackItem = {
@@ -58,17 +67,27 @@ const initialDoc: EditorDoc = {
 
 export default function Editor() {
   const router = useRouter();
-  const { id } = router.query;
+  const { id, mode } = router.query;
   const [user, setUser] = useState<AuthUser | null>(null);
   const [doc, setDoc] = useState<EditorDoc>(initialDoc);
   const [authorName, setAuthorName] = useState('');
+  const [authorAvatar, setAuthorAvatar] = useState('');
+  const [categories, setCategories] = useState<CategoryRecord[]>([]);
   const [blocks, setBlocks] = useState<ContentBlock[]>([createTextBlock()]);
+  const [createdAt, setCreatedAt] = useState('');
+  const [updatedAt, setUpdatedAt] = useState('');
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const [feedbackItems, setFeedbackItems] = useState<FeedbackItem[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackError, setFeedbackError] = useState('');
   const [error, setError] = useState('');
+
+  const isExistingDoc = typeof id === 'string';
+  const isPreviewMode = isExistingDoc && mode !== 'edit';
 
   useEffect(() => {
     const session = getAuthSession();
@@ -79,6 +98,7 @@ export default function Editor() {
 
     setUser(session.user);
     setAuthorName(session.user.username);
+    void loadCategories(session.token);
 
     if (typeof id !== 'string') {
       setInitializing(false);
@@ -109,12 +129,24 @@ export default function Editor() {
         status: data.status || 'DRAFT',
       });
       setAuthorName(data.author || '');
+      setAuthorAvatar(data.author_avatar || '');
+      setCreatedAt(data.created_at || '');
+      setUpdatedAt(data.updated_at || '');
       setBlocks(normalizeContentBlocks(data.content_json, data.content || ''));
       await loadFeedback(token, documentID);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load document');
     } finally {
       setInitializing(false);
+    }
+  };
+
+  const loadCategories = async (token: string) => {
+    try {
+      const data = await apiRequest<CategoryRecord[]>('/api/admin/categories', { token });
+      setCategories(data || []);
+    } catch {
+      setCategories([]);
     }
   };
 
@@ -245,14 +277,23 @@ export default function Editor() {
       };
 
       const method = typeof id === 'string' ? 'PUT' : 'POST';
-      const path =
-        typeof id === 'string' ? `/api/admin/docs/${id}` : '/api/admin/docs';
+      const path = typeof id === 'string' ? `/api/admin/docs/${id}` : '/api/admin/docs';
 
-      await apiRequest(path, {
+      const response = await apiRequest<ManagedDocumentResponse>(path, {
         method,
         token: session.token,
         json: payload,
       });
+
+      if (typeof id === 'string') {
+        void router.push(`/admin/editor?id=${id}`);
+        return;
+      }
+
+      if (response?.id) {
+        void router.push(`/admin/editor?id=${response.id}`);
+        return;
+      }
 
       void router.push('/admin/dashboard');
     } catch (err) {
@@ -262,7 +303,37 @@ export default function Editor() {
     }
   };
 
+  const handleDelete = async () => {
+    const session = getAuthSession();
+    if (!session || typeof id !== 'string') {
+      return;
+    }
+
+    setDeleting(true);
+    setError('');
+
+    try {
+      await apiRequest(`/api/admin/docs/${id}`, {
+        method: 'DELETE',
+        token: session.token,
+      });
+      void router.push('/admin/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete document');
+      setDeleting(false);
+    }
+  };
+
   const previewBlocks = useMemo(() => serializeContentBlocks(blocks), [blocks]);
+  const categoryOptions = useMemo(() => {
+    if (!doc.category) {
+      return categories;
+    }
+
+    return categories.some((category) => category.name === doc.category)
+      ? categories
+      : [{ id: 'current-category', name: doc.category }, ...categories];
+  }, [categories, doc.category]);
   const reviewItems = useMemo(
     () => feedbackItems.filter((item) => item.type === 'comment'),
     [feedbackItems],
@@ -271,6 +342,145 @@ export default function Editor() {
     () => feedbackItems.filter((item) => item.type === 'suggestion'),
     [feedbackItems],
   );
+  const categoryItems = useMemo(
+    () =>
+      doc.category
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    [doc.category],
+  );
+  const tagItems = useMemo(
+    () =>
+      doc.tags
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    [doc.tags],
+  );
+  const authorAvatarSrc = authorAvatar
+    ? `${API_BASE_URL}${authorAvatar}`
+    : `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName || 'Author')}&background=f3f4f6&color=111827`;
+
+  const renderPreviewContent = () => (
+    <div className="admin-editor-preview-body">
+      {previewBlocks.length === 0 ? (
+        <p>Start writing to preview the document here.</p>
+      ) : (
+        previewBlocks.map((block, index) => {
+          if (block.type === 'text') {
+            return (
+              <ReactMarkdown key={`${block.type}-${index}`} remarkPlugins={[remarkGfm]}>
+                {block.markdown}
+              </ReactMarkdown>
+            );
+          }
+
+          return (
+            <div
+              key={`${block.type}-${index}`}
+              className={`admin-editor-preview-image-row is-${block.layout}`}
+            >
+              {block.images.map((image, imageIndex) => (
+                <figure key={`${image.url}-${imageIndex}`}>
+                  <img src={image.url} alt={image.alt || `Row image ${imageIndex + 1}`} />
+                  {image.caption ? <figcaption>{image.caption}</figcaption> : null}
+                </figure>
+              ))}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+
+  const feedbackPanel = isExistingDoc ? (
+    <section className="admin-editor-feedback-panel">
+      <div className="admin-editor-section-head">
+        <span className="admin-editor-kicker">Owner Feedback</span>
+        <span className="admin-editor-section-note">
+          Only the content owner can review this queue
+        </span>
+      </div>
+
+      {feedbackError ? <p className="admin-editor-feedback is-error">{feedbackError}</p> : null}
+
+      <div className="admin-editor-feedback-groups">
+        <div className="admin-editor-feedback-group">
+          <div className="admin-editor-feedback-head">
+            <h3>Reviews</h3>
+            <span>{reviewItems.length}</span>
+          </div>
+
+          {feedbackLoading ? (
+            <p className="admin-editor-feedback-empty">Loading reviews...</p>
+          ) : reviewItems.length === 0 ? (
+            <p className="admin-editor-feedback-empty">No reviews yet.</p>
+          ) : (
+            <div className="admin-editor-feedback-list">
+              {reviewItems.map((item) => (
+                <article key={item.id} className="admin-editor-feedback-card">
+                  <div className="admin-editor-feedback-card-top">
+                    <div>
+                      <strong className="admin-editor-feedback-name">{item.commenter_name}</strong>
+                      <div className="admin-editor-feedback-stars">
+                        {'★★★★★'.slice(0, item.stars)}
+                        <span>{'★★★★★'.slice(item.stars)}</span>
+                      </div>
+                    </div>
+                    <span className={`admin-editor-feedback-status${item.is_approved ? ' is-approved' : ''}`}>
+                      {item.is_approved ? 'Approved' : 'Pending'}
+                    </span>
+                  </div>
+                  <p>{item.comment}</p>
+                  <div className="admin-editor-feedback-card-bottom">
+                    <time>{new Date(item.created_at).toLocaleDateString()}</time>
+                    {!item.is_approved ? (
+                      <button
+                        type="button"
+                        className="admin-editor-feedback-action"
+                        onClick={() => handleApproveComment(item.id)}
+                      >
+                        Approve
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="admin-editor-feedback-group">
+          <div className="admin-editor-feedback-head">
+            <h3>Private Suggestions</h3>
+            <span>{suggestionItems.length}</span>
+          </div>
+
+          {feedbackLoading ? (
+            <p className="admin-editor-feedback-empty">Loading suggestions...</p>
+          ) : suggestionItems.length === 0 ? (
+            <p className="admin-editor-feedback-empty">No private suggestions yet.</p>
+          ) : (
+            <div className="admin-editor-feedback-list">
+              {suggestionItems.map((item) => (
+                <article key={item.id} className="admin-editor-feedback-card">
+                  <div className="admin-editor-feedback-card-top">
+                    <div>
+                      <strong className="admin-editor-feedback-name">{item.commenter_name}</strong>
+                      <span className="admin-editor-feedback-status is-private">Private</span>
+                    </div>
+                    <time>{new Date(item.created_at).toLocaleDateString()}</time>
+                  </div>
+                  <p>{item.comment}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  ) : null;
 
   return (
     <div className="admin-editor-page">
@@ -286,332 +496,393 @@ export default function Editor() {
         <header className="admin-editor-topbar">
           <div className="admin-editor-topbar-main">
             <div className="admin-editor-heading">
-              <h1>{typeof id === 'string' ? 'Edit Documentation' : 'New Documentation'}</h1>
+              <h1>
+                {isPreviewMode
+                  ? doc.title || 'Document Preview'
+                  : typeof id === 'string'
+                    ? 'Edit Documentation'
+                    : 'New Documentation'}
+              </h1>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={loading || initializing}
-            className="admin-editor-publish"
-          >
-            {loading ? 'Saving...' : doc.status === 'PUBLISHED' ? 'Save Published Doc' : 'Save Draft'}
-          </button>
+          <div className="admin-editor-topbar-actions">
+            {isExistingDoc && isPreviewMode ? (
+              <>
+                <Link href={`/admin/editor?id=${id}&mode=edit`} className="admin-editor-secondary">
+                  Edit
+                </Link>
+                <button type="button" className="admin-editor-danger" onClick={() => setDeleteModalOpen(true)}>
+                  Delete
+                </button>
+              </>
+            ) : (
+              <>
+                {isExistingDoc ? (
+                  <Link href={`/admin/editor?id=${id}`} className="admin-editor-secondary">
+                    Preview
+                  </Link>
+                ) : null}
+                {isExistingDoc ? (
+                  <button type="button" className="admin-editor-danger" onClick={() => setDeleteModalOpen(true)}>
+                    Delete
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={loading || initializing}
+                  className="admin-editor-publish"
+                >
+                  {loading ? 'Saving...' : doc.status === 'PUBLISHED' ? 'Save Published Doc' : 'Save Draft'}
+                </button>
+              </>
+            )}
+          </div>
         </header>
 
         {error ? <p className="admin-editor-feedback is-error">{error}</p> : null}
 
-        <section className="admin-editor-layout">
-          <section className="admin-editor-form-column">
-            <div className="admin-editor-primary-fields">
-              <label className="admin-editor-field admin-editor-field-title">
-                <span>Title</span>
-                <input
-                  type="text"
-                  placeholder="Document title"
-                  value={doc.title}
-                  onChange={(event) => setField('title', event.target.value)}
-                />
-              </label>
-
-              <label className="admin-editor-field admin-editor-field-description">
-                <span>Description</span>
-                <textarea
-                  placeholder="Short summary for readers"
-                  value={doc.description}
-                  onChange={(event) => setField('description', event.target.value)}
-                  rows={3}
-                />
-              </label>
-            </div>
-
-            <div className="admin-editor-meta-grid">
-              <label className="admin-editor-field">
-                <span>Author</span>
-                <input type="text" value={authorName} readOnly />
-              </label>
-
-              <label className="admin-editor-field">
-                <span>Status</span>
-                <select
-                  className="admin-editor-select"
-                  value={doc.status}
-                  onChange={(event) => setField('status', event.target.value)}
-                >
-                  <option value="DRAFT">DRAFT</option>
-                  <option value="PUBLISHED">PUBLISHED</option>
-                </select>
-              </label>
-
-              <label className="admin-editor-field">
-                <span>Category</span>
-                <input
-                  type="text"
-                  placeholder="Primary category"
-                  value={doc.category}
-                  onChange={(event) => setField('category', event.target.value)}
-                />
-              </label>
-
-              <label className="admin-editor-field">
-                <span>Read Time</span>
-                <input
-                  type="text"
-                  placeholder="10 min read"
-                  value={doc.readTime}
-                  onChange={(event) => setField('readTime', event.target.value)}
-                />
-              </label>
-
-              <label className="admin-editor-field admin-editor-field-full">
-                <span>Feature Image URL</span>
-                <input
-                  type="text"
-                  placeholder="https://example.com/image.jpg"
-                  value={doc.image}
-                  onChange={(event) => setField('image', event.target.value)}
-                />
-              </label>
-
-              <label className="admin-editor-field admin-editor-field-full">
-                <span>Tags</span>
-                <input
-                  type="text"
-                  placeholder="TypeScript, JavaScript, Web Development"
-                  value={doc.tags}
-                  onChange={(event) => setField('tags', event.target.value)}
-                />
-              </label>
-            </div>
-
-            <section className="admin-editor-content-panel">
-              <div className="admin-editor-section-head">
-                <span className="admin-editor-kicker">Content Blocks</span>
-                <span className="admin-editor-section-note">
-                  Text blocks and image rows stored in JSON
-                </span>
+        {isPreviewMode ? (
+          <section className="admin-editor-reader-layout">
+            <aside className="admin-editor-reader-sidebar">
+              <div className="admin-editor-reader-section">
+                <span className="admin-editor-kicker">Author</span>
+                <div className="admin-editor-reader-author">
+                  <img src={authorAvatarSrc} alt={authorName || 'Author'} />
+                  <strong>{authorName || 'Unknown author'}</strong>
+                </div>
               </div>
 
-              <div className="admin-editor-block-list">
-                {initializing ? (
-                  <p className="admin-editor-loading">Loading document…</p>
-                ) : (
-                  blocks.map((block, index) => (
-                    <article key={block.id} className="admin-editor-block">
-                      <div className="admin-editor-block-head">
-                        <div>
-                          <strong>
-                            {block.type === 'text' ? 'Text Block' : 'Image Row'} {index + 1}
-                          </strong>
-                          <span>
-                            {block.type === 'text'
-                              ? 'Markdown content'
-                              : `${block.layout === 'double' ? 'Two-image' : 'Single-image'} row`}
-                          </span>
-                        </div>
-                        <div className="admin-editor-block-actions">
-                          <button type="button" onClick={() => moveBlock(index, -1)}>
-                            Up
-                          </button>
-                          <button type="button" onClick={() => moveBlock(index, 1)}>
-                            Down
-                          </button>
-                          <button type="button" onClick={() => removeBlock(block.id)}>
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-
-                      {block.type === 'text' ? (
-                        <label className="admin-editor-field admin-editor-field-content">
-                          <textarea
-                            placeholder="Write markdown for this block..."
-                            value={block.markdown}
-                            onChange={(event) => setTextBlock(block.id, event.target.value)}
-                          />
-                        </label>
-                      ) : (
-                        <ImageRowEditor
-                          block={block}
-                          onLayoutChange={setImageRowLayout}
-                          onImageFieldChange={setImageField}
-                        />
-                      )}
-                    </article>
-                  ))
-                )}
+              <div className="admin-editor-reader-section">
+                <span className="admin-editor-kicker">Published</span>
+                <strong>{formatDisplayDate(createdAt)}</strong>
               </div>
 
-              <div className="admin-editor-additions">
-                <button type="button" onClick={addTextBlock} className="admin-editor-add-button">
-                  Add Text Block
-                </button>
-                <button type="button" onClick={addImageRowBlock} className="admin-editor-add-button">
-                  Add Image Row
-                </button>
+              <div className="admin-editor-reader-section">
+                <span className="admin-editor-kicker">Updated</span>
+                <strong>{formatDisplayDate(updatedAt)}</strong>
               </div>
+
+              {categoryItems.length > 0 ? (
+                <div className="admin-editor-reader-section">
+                  <span className="admin-editor-kicker">Categories</span>
+                  <div className="admin-editor-reader-tags">
+                    {categoryItems.map((item) => (
+                      <span key={item}>{item}</span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {tagItems.length > 0 ? (
+                <div className="admin-editor-reader-section">
+                  <span className="admin-editor-kicker">Tags</span>
+                  <div className="admin-editor-reader-tags">
+                    {tagItems.map((item) => (
+                      <span key={item}>{item}</span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {doc.readTime ? (
+                <div className="admin-editor-reader-section">
+                  <span className="admin-editor-kicker">Read Time</span>
+                  <strong>{doc.readTime}</strong>
+                </div>
+              ) : null}
+            </aside>
+
+            <section className="admin-editor-reader-main">
+              <article className="admin-editor-preview admin-editor-preview-full">
+                <h1>{doc.title || 'Untitled document'}</h1>
+                {doc.description ? (
+                  <p className="admin-editor-preview-description">{doc.description}</p>
+                ) : null}
+
+                {doc.image ? (
+                  <div className="admin-editor-feature-image">
+                    <img src={doc.image} alt={doc.title || 'Document feature'} />
+                  </div>
+                ) : null}
+
+                {renderPreviewContent()}
+              </article>
+
+              {feedbackPanel}
             </section>
           </section>
+        ) : (
+          <section className="admin-editor-layout">
+            <section className="admin-editor-form-column">
+              <div className="admin-editor-primary-fields">
+                <label className="admin-editor-field admin-editor-field-title">
+                  <span>Title</span>
+                  <input
+                    type="text"
+                    placeholder="Document title"
+                    value={doc.title}
+                    onChange={(event) => setField('title', event.target.value)}
+                  />
+                </label>
 
-          <aside className="admin-editor-preview-column">
-            <div className="admin-editor-section-head">
-              <span className="admin-editor-kicker">Preview</span>
-              <span className="admin-editor-section-note">Public reading view</span>
-            </div>
-
-            <article className="admin-editor-preview">
-              <h1>{doc.title || 'Untitled document'}</h1>
-              {doc.description ? (
-                <p className="admin-editor-preview-description">{doc.description}</p>
-              ) : null}
-
-              <div className="admin-editor-preview-meta">
-                {authorName ? <span>{authorName}</span> : null}
-                {doc.category ? <span>{doc.category}</span> : null}
-                {doc.readTime ? <span>{doc.readTime}</span> : null}
-                <span>{doc.status}</span>
+                <label className="admin-editor-field admin-editor-field-description">
+                  <span>Description</span>
+                  <textarea
+                    placeholder="Short summary for readers"
+                    value={doc.description}
+                    onChange={(event) => setField('description', event.target.value)}
+                    rows={3}
+                  />
+                </label>
               </div>
 
-              {doc.tags ? (
-                <div className="admin-editor-preview-tags">
-                  {doc.tags
-                    .split(',')
-                    .map((tag) => tag.trim())
-                    .filter(Boolean)
-                    .map((tag) => (
-                      <span key={tag}>{tag}</span>
+              <div className="admin-editor-meta-grid">
+                <label className="admin-editor-field">
+                  <span>Author</span>
+                  <input type="text" value={authorName} readOnly />
+                </label>
+
+                <label className="admin-editor-field">
+                  <span>Status</span>
+                  <select
+                    className="admin-editor-select"
+                    value={doc.status}
+                    onChange={(event) => setField('status', event.target.value)}
+                  >
+                    <option value="DRAFT">DRAFT</option>
+                    <option value="PUBLISHED">PUBLISHED</option>
+                  </select>
+                </label>
+
+                <label className="admin-editor-field">
+                  <span>Category</span>
+                  <select
+                    className="admin-editor-select"
+                    value={doc.category}
+                    onChange={(event) => setField('category', event.target.value)}
+                    disabled={categories.length === 0}
+                  >
+                    <option value="">
+                      {categories.length === 0 ? 'No categories available' : 'Select category'}
+                    </option>
+                    {categoryOptions.map((category) => (
+                      <option key={category.id} value={category.name}>
+                        {category.name}
+                      </option>
                     ))}
-                </div>
-              ) : null}
+                  </select>
+                  <span className="admin-editor-field-note">
+                    {categories.length === 0 ? (
+                      <>
+                        No categories yet. <Link href="/admin/categories">Add the first category</Link>.
+                      </>
+                    ) : (
+                      <>
+                        Need another option? <Link href="/admin/categories">Manage categories</Link>.
+                      </>
+                    )}
+                  </span>
+                </label>
 
-              {doc.image ? (
-                <div className="admin-editor-feature-image">
-                  <img src={doc.image} alt={doc.title || 'Document feature'} />
-                </div>
-              ) : null}
+                <label className="admin-editor-field">
+                  <span>Read Time</span>
+                  <input
+                    type="text"
+                    placeholder="10 min read"
+                    value={doc.readTime}
+                    onChange={(event) => setField('readTime', event.target.value)}
+                  />
+                </label>
 
-              <div className="admin-editor-preview-body">
-                {previewBlocks.length === 0 ? (
-                  <p>Start writing to preview the document here.</p>
-                ) : (
-                  previewBlocks.map((block, index) => {
-                    if (block.type === 'text') {
-                      return <ReactMarkdown key={`${block.type}-${index}`}>{block.markdown}</ReactMarkdown>;
-                    }
+                <label className="admin-editor-field admin-editor-field-full">
+                  <span>Feature Image URL</span>
+                  <input
+                    type="text"
+                    placeholder="https://example.com/image.jpg"
+                    value={doc.image}
+                    onChange={(event) => setField('image', event.target.value)}
+                  />
+                </label>
 
-                    return (
-                      <div
-                        key={`${block.type}-${index}`}
-                        className={`admin-editor-preview-image-row is-${block.layout}`}
-                      >
-                        {block.images.map((image, imageIndex) => (
-                          <figure key={`${image.url}-${imageIndex}`}>
-                            <img src={image.url} alt={image.alt || `Row image ${imageIndex + 1}`} />
-                            {image.caption ? <figcaption>{image.caption}</figcaption> : null}
-                          </figure>
-                        ))}
-                      </div>
-                    );
-                  })
-                )}
+                <label className="admin-editor-field admin-editor-field-full">
+                  <span>Tags</span>
+                  <input
+                    type="text"
+                    placeholder="TypeScript, JavaScript, Web Development"
+                    value={doc.tags}
+                    onChange={(event) => setField('tags', event.target.value)}
+                  />
+                </label>
               </div>
-            </article>
 
-            {typeof id === 'string' ? (
-              <section className="admin-editor-feedback-panel">
+              <section className="admin-editor-content-panel">
                 <div className="admin-editor-section-head">
-                  <span className="admin-editor-kicker">Owner Feedback</span>
+                  <span className="admin-editor-kicker">Content Blocks</span>
                   <span className="admin-editor-section-note">
-                    Only the content owner can review this queue
+                    Text blocks and image rows stored in JSON
                   </span>
                 </div>
 
-                {feedbackError ? (
-                  <p className="admin-editor-feedback is-error">{feedbackError}</p>
-                ) : null}
+                <div className="admin-editor-block-list">
+                  {initializing ? (
+                    <p className="admin-editor-loading">Loading document...</p>
+                  ) : (
+                    blocks.map((block, index) => (
+                      <article key={block.id} className="admin-editor-block">
+                        <div className="admin-editor-block-head">
+                          <div>
+                            <strong>
+                              {block.type === 'text' ? 'Text Block' : 'Image Row'} {index + 1}
+                            </strong>
+                            <span>
+                              {block.type === 'text'
+                                ? 'Markdown content'
+                                : `${block.layout === 'double' ? 'Two-image' : 'Single-image'} row`}
+                            </span>
+                          </div>
+                          <div className="admin-editor-block-actions">
+                            <button type="button" onClick={() => moveBlock(index, -1)}>
+                              Up
+                            </button>
+                            <button type="button" onClick={() => moveBlock(index, 1)}>
+                              Down
+                            </button>
+                            <button type="button" onClick={() => removeBlock(block.id)}>
+                              Remove
+                            </button>
+                          </div>
+                        </div>
 
-                <div className="admin-editor-feedback-groups">
-                  <div className="admin-editor-feedback-group">
-                    <div className="admin-editor-feedback-head">
-                      <h3>Reviews</h3>
-                      <span>{reviewItems.length}</span>
-                    </div>
+                        {block.type === 'text' ? (
+                          <label className="admin-editor-field admin-editor-field-content">
+                            <textarea
+                              placeholder="Write markdown for this block..."
+                              value={block.markdown}
+                              onChange={(event) => setTextBlock(block.id, event.target.value)}
+                            />
+                          </label>
+                        ) : (
+                          <ImageRowEditor
+                            block={block}
+                            onLayoutChange={setImageRowLayout}
+                            onImageFieldChange={setImageField}
+                          />
+                        )}
+                      </article>
+                    ))
+                  )}
+                </div>
 
-                    {feedbackLoading ? (
-                      <p className="admin-editor-feedback-empty">Loading reviews…</p>
-                    ) : reviewItems.length === 0 ? (
-                      <p className="admin-editor-feedback-empty">No reviews yet.</p>
-                    ) : (
-                      <div className="admin-editor-feedback-list">
-                        {reviewItems.map((item) => (
-                          <article key={item.id} className="admin-editor-feedback-card">
-                            <div className="admin-editor-feedback-card-top">
-                              <div>
-                                <strong className="admin-editor-feedback-name">{item.commenter_name}</strong>
-                                <div className="admin-editor-feedback-stars">
-                                  {'★★★★★'.slice(0, item.stars)}
-                                  <span>{'★★★★★'.slice(item.stars)}</span>
-                                </div>
-                              </div>
-                              <span className={`admin-editor-feedback-status${item.is_approved ? ' is-approved' : ''}`}>
-                                {item.is_approved ? 'Approved' : 'Pending'}
-                              </span>
-                            </div>
-                            <p>{item.comment}</p>
-                            <div className="admin-editor-feedback-card-bottom">
-                              <time>{new Date(item.created_at).toLocaleDateString()}</time>
-                              {!item.is_approved ? (
-                                <button
-                                  type="button"
-                                  className="admin-editor-feedback-action"
-                                  onClick={() => handleApproveComment(item.id)}
-                                >
-                                  Approve
-                                </button>
-                              ) : null}
-                            </div>
-                          </article>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="admin-editor-feedback-group">
-                    <div className="admin-editor-feedback-head">
-                      <h3>Private Suggestions</h3>
-                      <span>{suggestionItems.length}</span>
-                    </div>
-
-                    {feedbackLoading ? (
-                      <p className="admin-editor-feedback-empty">Loading suggestions…</p>
-                    ) : suggestionItems.length === 0 ? (
-                      <p className="admin-editor-feedback-empty">No private suggestions yet.</p>
-                    ) : (
-                      <div className="admin-editor-feedback-list">
-                        {suggestionItems.map((item) => (
-                          <article key={item.id} className="admin-editor-feedback-card">
-                            <div className="admin-editor-feedback-card-top">
-                              <div>
-                                <strong className="admin-editor-feedback-name">{item.commenter_name}</strong>
-                                <span className="admin-editor-feedback-status is-private">Private</span>
-                              </div>
-                              <time>{new Date(item.created_at).toLocaleDateString()}</time>
-                            </div>
-                            <p>{item.comment}</p>
-                          </article>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                <div className="admin-editor-additions">
+                  <button type="button" onClick={addTextBlock} className="admin-editor-add-button">
+                    Add Text Block
+                  </button>
+                  <button type="button" onClick={addImageRowBlock} className="admin-editor-add-button">
+                    Add Image Row
+                  </button>
                 </div>
               </section>
-            ) : null}
-          </aside>
-        </section>
+            </section>
+
+            <aside className="admin-editor-preview-column">
+              <div className="admin-editor-section-head">
+                <span className="admin-editor-kicker">Preview</span>
+                <span className="admin-editor-section-note">Public reading view</span>
+              </div>
+
+              <article className="admin-editor-preview">
+                <h1>{doc.title || 'Untitled document'}</h1>
+                {doc.description ? (
+                  <p className="admin-editor-preview-description">{doc.description}</p>
+                ) : null}
+
+                {doc.image ? (
+                  <div className="admin-editor-feature-image">
+                    <img src={doc.image} alt={doc.title || 'Document feature'} />
+                  </div>
+                ) : null}
+
+                {renderPreviewContent()}
+              </article>
+
+              {feedbackPanel}
+            </aside>
+          </section>
+        )}
       </main>
+
+      {deleteModalOpen ? (
+        <div
+          className="admin-editor-modal-overlay"
+          role="presentation"
+          onClick={() => {
+            setDeleteModalOpen(false);
+            setDeleteConfirmText('');
+          }}
+        >
+          <div
+            className="admin-editor-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-doc-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="delete-doc-title">Delete document</h2>
+            <p>
+              This action cannot be undone. Type <strong>delete</strong> to confirm removal.
+            </p>
+            <input
+              type="text"
+              className="admin-editor-modal-input"
+              value={deleteConfirmText}
+              onChange={(event) => setDeleteConfirmText(event.target.value)}
+              placeholder="Type delete"
+            />
+            <div className="admin-editor-modal-actions">
+              <button
+                type="button"
+                className="admin-editor-secondary"
+                onClick={() => {
+                  setDeleteModalOpen(false);
+                  setDeleteConfirmText('');
+                }}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="admin-editor-danger"
+                onClick={handleDelete}
+                disabled={deleting || deleteConfirmText.trim().toLowerCase() !== 'delete'}
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function formatDisplayDate(date: string) {
+  if (!date) {
+    return 'Not available';
+  }
+
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) {
+    return date;
+  }
+
+  return parsed.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 type ImageRowEditorProps = {

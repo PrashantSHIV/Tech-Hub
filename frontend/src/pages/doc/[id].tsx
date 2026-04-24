@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import Head from 'next/head';
 import Header from '@/components/Header';
 import { API_BASE_URL } from '@/lib/api';
@@ -440,7 +441,7 @@ export default function DocDetail() {
               lineHeight: '1.6', 
               color: '#374151',
             }}>
-              <ReactMarkdown components={{
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
                 h1: ({node, ...props}) => {
                   const id = slugify(props.children);
                   return <h1 id={id} style={{fontSize: '24px', fontWeight: '800', marginTop: '1.5em', marginBottom: '0.8em', color: '#1a1a1a', letterSpacing: '-1px', lineHeight: '1.2', fontFamily: "'Plus Jakarta Sans', sans-serif"}} {...props} />;

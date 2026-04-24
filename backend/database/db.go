@@ -38,6 +38,7 @@ func InitDB() {
 	resetLegacySchemaIfNeeded()
 	createSchema()
 	seedDevData()
+	syncCategoryLibrary()
 }
 
 func getDatabaseURL() string {
@@ -184,6 +185,16 @@ func createSchema() {
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	);
 
+	CREATE TABLE IF NOT EXISTS categories (
+		id UUID PRIMARY KEY,
+		name TEXT NOT NULL,
+		created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
+
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_name_lower ON categories(LOWER(name));
+
 	CREATE TABLE IF NOT EXISTS password_reset_otps (
 		id UUID PRIMARY KEY,
 		user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -235,6 +246,7 @@ func createSchema() {
 	CREATE INDEX IF NOT EXISTS idx_documents_status_created_at ON documents(status, created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_documents_author_id ON documents(author_id);
 	CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+	CREATE INDEX IF NOT EXISTS idx_categories_created_by ON categories(created_by);
 	CREATE INDEX IF NOT EXISTS idx_password_reset_otps_user_id ON password_reset_otps(user_id);
 	`
 
@@ -332,4 +344,35 @@ func seedDevData() {
 	}
 
 	log.Println(fmt.Sprintf("Seeded default accounts: admin@example.com/admin123 and member@example.com/member123"))
+}
+
+func syncCategoryLibrary() {
+	rows, err := DB.Query(`
+		SELECT DISTINCT ON (LOWER(TRIM(category)))
+			TRIM(category) AS category_name,
+			author_id
+		FROM documents
+		WHERE COALESCE(TRIM(category), '') <> ''
+		ORDER BY LOWER(TRIM(category)), created_at ASC
+	`)
+	if err != nil {
+		log.Fatal("Failed to inspect document categories:", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var categoryName string
+		var createdBy string
+		if err := rows.Scan(&categoryName, &createdBy); err != nil {
+			log.Fatal("Failed to scan document categories:", err)
+		}
+
+		if _, err := DB.Exec(`
+			INSERT INTO categories (id, name, created_by)
+			VALUES ($1, $2, $3)
+			ON CONFLICT DO NOTHING
+		`, uuid.New().String(), categoryName, createdBy); err != nil {
+			log.Fatal("Failed to sync category library:", err)
+		}
+	}
 }

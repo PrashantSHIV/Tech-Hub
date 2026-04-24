@@ -62,9 +62,13 @@ func main() {
 		adminDocs.GET("/docs", handlers.GetManagedDocuments)
 		adminDocs.GET("/docs/:id", handlers.GetManagedDocument)
 		adminDocs.GET("/docs/:id/interactions", handlers.GetOwnedInteractions)
+		adminDocs.GET("/categories", handlers.ListManagedCategories)
 		adminDocs.POST("/docs", handlers.CreateDocument)
+		adminDocs.POST("/categories", handlers.CreateCategory)
 		adminDocs.PUT("/docs/:id", handlers.UpdateDocument)
+		adminDocs.PUT("/categories/:id", handlers.UpdateCategory)
 		adminDocs.DELETE("/docs/:id", handlers.DeleteDocument)
+		adminDocs.DELETE("/categories/:id", handlers.DeleteCategory)
 		adminDocs.POST("/comments/:id/approve", handlers.ApproveComment)
 	}
 

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 
 type AdminNavProps = {
-  current: 'dashboard' | 'editor' | 'users' | 'avatars' | 'profile';
+  current: 'dashboard' | 'editor' | 'users' | 'avatars' | 'profile' | 'categories';
   role?: 'ADMIN' | 'MEMBER';
 };
 
@@ -9,6 +9,7 @@ export default function AdminNav({ current, role }: AdminNavProps) {
   const links = [
     { key: 'dashboard', href: '/admin/dashboard', label: 'Dashboard' },
     { key: 'editor', href: '/admin/editor', label: 'Write' },
+    { key: 'categories', href: '/admin/categories', label: 'Categories' },
     { key: 'profile', href: '/admin/profile', label: 'Profile' },
   ];
 

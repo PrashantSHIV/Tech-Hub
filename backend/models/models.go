@@ -25,6 +25,17 @@ type AvatarLibrary struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+type Category struct {
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	CreatedBy     string    `json:"created_by"`
+	CreatedByName string    `json:"created_by_name,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	DocCount      int       `json:"doc_count"`
+	CanManage     bool      `json:"can_manage"`
+}
+
 type PasswordResetOTP struct {
 	ID        string     `json:"id"`
 	UserID    string     `json:"user_id"`

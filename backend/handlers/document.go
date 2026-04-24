@@ -45,6 +45,12 @@ func CreateDocument(c *gin.Context) {
 		return
 	}
 
+	category, err := resolveCategorySelection(payload.Category)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "selected category does not exist"})
+		return
+	}
+
 	status, err := normalizeStatus(payload.Status)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -66,7 +72,7 @@ func CreateDocument(c *gin.Context) {
 		AuthorID:    currentUser.ID,
 		Author:      currentUser.Username,
 		Tags:        normalizeCSV(payload.Tags),
-		Category:    strings.TrimSpace(payload.Category),
+		Category:    category,
 		Image:       strings.TrimSpace(payload.Image),
 		ReadTime:    strings.TrimSpace(payload.ReadTime),
 		Status:      status,
@@ -187,6 +193,12 @@ func UpdateDocument(c *gin.Context) {
 		return
 	}
 
+	category, err := resolveCategorySelection(payload.Category)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "selected category does not exist"})
+		return
+	}
+
 	if _, err := database.DB.Exec(`
 		UPDATE documents
 		SET title = $1,
@@ -202,7 +214,7 @@ func UpdateDocument(c *gin.Context) {
 	`,
 		strings.TrimSpace(payload.Title),
 		strings.TrimSpace(payload.Description),
-		strings.TrimSpace(payload.Category),
+		category,
 		normalizeCSV(payload.Tags),
 		string(contentJSON),
 		status,

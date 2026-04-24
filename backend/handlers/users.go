@@ -169,6 +169,20 @@ func DeleteUser(c *gin.Context) {
 		return
 	}
 
+	var categoryCount int
+	if err := database.DB.QueryRow(`
+		SELECT COUNT(*)
+		FROM categories
+		WHERE created_by = $1
+	`, userID).Scan(&categoryCount); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to inspect user categories"})
+		return
+	}
+	if categoryCount > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "Reassign or remove the user's categories before deleting the account"})
+		return
+	}
+
 	_, err := database.DB.Exec("DELETE FROM users WHERE id = $1", userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
