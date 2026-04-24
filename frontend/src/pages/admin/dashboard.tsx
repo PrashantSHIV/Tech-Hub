@@ -5,7 +5,7 @@ import { useRouter } from 'next/router';
 import Header from '@/components/Header';
 import AdminNav from '@/components/AdminNav';
 import { apiRequest } from '@/lib/api';
-import { clearAuthSession, getAuthSession, type AuthUser } from '@/lib/auth';
+import { getAuthSession, type AuthUser } from '@/lib/auth';
 
 type DocRecord = {
   id: string;
@@ -49,6 +49,8 @@ export default function Dashboard() {
   const [docs, setDocs] = useState<DocRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [scope, setScope] = useState<'all' | 'my'>('all');
 
   useEffect(() => {
     const session = getAuthSession();
@@ -103,11 +105,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleLogout = () => {
-    clearAuthSession();
-    void router.push('/login');
-  };
-
   const summary = useMemo(() => {
     const published = docs.filter((doc) => doc.status === 'PUBLISHED').length;
     const drafts = docs.filter((doc) => doc.status === 'DRAFT').length;
@@ -127,6 +124,40 @@ export default function Dashboard() {
     };
   }, [docs]);
 
+  const filteredDocs = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    return docs.filter((doc) => {
+      const isMyDoc =
+        (doc.author || '').trim().toLowerCase() === (user?.username || '').trim().toLowerCase();
+      if (scope === 'my' && !isMyDoc) {
+        return false;
+      }
+
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      const haystack = [
+        doc.title,
+        doc.description,
+        doc.author,
+        doc.category,
+        doc.tags,
+        doc.status,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return haystack.includes(normalizedQuery);
+    });
+  }, [docs, scope, searchQuery, user?.username]);
+
+  const filteredTopics = useMemo(() => {
+    return new Set(filteredDocs.flatMap((doc) => getDocTopics(doc))).size;
+  }, [filteredDocs]);
+
   return (
     <div className="admin-dashboard-page">
       <Head>
@@ -140,8 +171,8 @@ export default function Dashboard() {
 
         <header className="admin-dashboard-header">
           <div className="admin-dashboard-intro">
-            <span className="admin-dashboard-kicker">Editorial Workspace</span>
-            <h1>{user?.role === 'ADMIN' ? 'Admin Dashboard' : 'Writer Dashboard'}</h1>
+            <span className="admin-dashboard-kicker">Workspace</span>
+            <h2>{user?.role === 'ADMIN' ? 'Admin Dashboard' : 'Writer Dashboard'}</h2>
             <p>
               {user?.role === 'ADMIN'
                 ? 'Manage your team, curated avatars, and every draft or published note in one editorial workspace.'
@@ -174,13 +205,42 @@ export default function Dashboard() {
             <div className="admin-dashboard-section-head">
               <div>
                 <span className="admin-dashboard-label">
-                  {user?.role === 'ADMIN' ? 'All Documentation' : 'Your Documentation'}
+                  {scope === 'my' ? 'My Documentation' : user?.role === 'ADMIN' ? 'All Documentation' : 'Your Documentation'}
                 </span>
-                <h2>{docs.length} tracked {docs.length === 1 ? 'entry' : 'entries'}</h2>
+                <h2>{filteredDocs.length} tracked {filteredDocs.length === 1 ? 'entry' : 'entries'}</h2>
               </div>
-              <span className="admin-dashboard-meta">
-                {summary.topics} active {summary.topics === 1 ? 'topic' : 'topics'}
-              </span>
+              <div className="admin-dashboard-tools">
+                {user?.role === 'ADMIN' ? (
+                  <div className="admin-dashboard-tabs" role="tablist" aria-label="Document scope">
+                    <button
+                      type="button"
+                      className={`admin-dashboard-tab${scope === 'all' ? ' is-active' : ''}`}
+                      onClick={() => setScope('all')}
+                    >
+                      All
+                    </button>
+                    <button
+                      type="button"
+                      className={`admin-dashboard-tab${scope === 'my' ? ' is-active' : ''}`}
+                      onClick={() => setScope('my')}
+                    >
+                      My
+                    </button>
+                  </div>
+                ) : null}
+                <label className="admin-dashboard-search">
+                  <span className="admin-dashboard-search-label">Search</span>
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search docs, authors, topics"
+                  />
+                </label>
+                <span className="admin-dashboard-meta">
+                  {filteredTopics} active {filteredTopics === 1 ? 'topic' : 'topics'}
+                </span>
+              </div>
             </div>
 
             {loading ? (
@@ -198,9 +258,14 @@ export default function Dashboard() {
                   Open editor
                 </Link>
               </div>
+            ) : filteredDocs.length === 0 ? (
+              <div className="admin-dashboard-empty">
+                <h3>No matching documentation</h3>
+                <p>Adjust the search or switch tabs to see more entries.</p>
+              </div>
             ) : (
               <div className="admin-doc-list">
-                {docs.map((doc) => {
+                {filteredDocs.map((doc) => {
                   const topics = getDocTopics(doc);
 
                   return (
@@ -249,69 +314,6 @@ export default function Dashboard() {
               </div>
             )}
           </section>
-
-          <aside className="admin-dashboard-sidebar">
-            <section className="admin-sidebar-section">
-              <span className="admin-dashboard-label">Workspace</span>
-              <h3>{user?.username || 'Editor'}</h3>
-              <p>
-                {user?.role === 'ADMIN'
-                  ? 'Admins can create and override any document, manage users, and curate the avatar library.'
-                  : 'Members can create and manage their own notes, then pick a curated avatar for their profile.'}
-              </p>
-              <div className="admin-sidebar-actions">
-                <Link href="/admin/editor" className="admin-sidebar-link is-primary">
-                  Create New Doc
-                </Link>
-                <Link href="/admin/profile" className="admin-sidebar-link">
-                  Edit Profile
-                </Link>
-                {user?.role === 'ADMIN' ? (
-                  <>
-                    <Link href="/admin/users" className="admin-sidebar-link">
-                      Manage Users
-                    </Link>
-                    <Link href="/admin/avatars" className="admin-sidebar-link">
-                      Manage Avatar Library
-                    </Link>
-                  </>
-                ) : null}
-                <button type="button" onClick={handleLogout} className="admin-sidebar-link">
-                  Logout
-                </button>
-              </div>
-            </section>
-
-            <section className="admin-sidebar-section">
-              <span className="admin-dashboard-label">Overview</span>
-              <dl className="admin-sidebar-metrics">
-                <div>
-                  <dt>Published</dt>
-                  <dd>{summary.published}</dd>
-                </div>
-                <div>
-                  <dt>Drafts</dt>
-                  <dd>{summary.drafts}</dd>
-                </div>
-                <div>
-                  <dt>Topics</dt>
-                  <dd>{summary.topics}</dd>
-                </div>
-                <div>
-                  <dt>Role</dt>
-                  <dd>{user?.role === 'ADMIN' ? 'A' : 'M'}</dd>
-                </div>
-              </dl>
-            </section>
-
-            <section className="admin-sidebar-section">
-              <span className="admin-dashboard-label">Publishing Rules</span>
-              <p>
-                Draft notes stay private to their author and admins. Published notes flow to the
-                public documentation pages automatically.
-              </p>
-            </section>
-          </aside>
         </section>
       </main>
     </div>
