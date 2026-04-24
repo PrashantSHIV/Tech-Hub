@@ -53,6 +53,7 @@ func main() {
 	{
 		authed.GET("/avatars", handlers.ListAvatars)
 		authed.PUT("/me/avatar", handlers.UpdateMyAvatar)
+		authed.PUT("/me/profile", handlers.UpdateMyProfile)
 	}
 
 	adminDocs := r.Group("/api/admin")
@@ -76,6 +77,7 @@ func main() {
 
 		adminOnly.GET("/avatars", handlers.ListAvatars)
 		adminOnly.POST("/avatars", handlers.UploadAvatar)
+		adminOnly.PUT("/avatars/:id", handlers.UpdateAvatar)
 		adminOnly.DELETE("/avatars/:id", handlers.DeleteAvatar)
 	}
 

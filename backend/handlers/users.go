@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/user/doc-platform/database"
 	"github.com/user/doc-platform/middleware"
 	"github.com/user/doc-platform/models"
@@ -59,11 +60,15 @@ func CreateUser(c *gin.Context) {
 		return
 	}
 
-	if input.SelectedAvatarID != nil {
-		if err := validateAvatarSelection(*input.SelectedAvatarID); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "selected avatar does not exist"})
-			return
-		}
+	if input.SelectedAvatarID == nil || strings.TrimSpace(*input.SelectedAvatarID) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "selected avatar is required"})
+		return
+	}
+
+	selectedAvatarID := strings.TrimSpace(*input.SelectedAvatarID)
+	if err := validateAvatarSelection(selectedAvatarID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "selected avatar does not exist"})
+		return
 	}
 
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
@@ -81,7 +86,7 @@ func CreateUser(c *gin.Context) {
 	_, err = database.DB.Exec(`
 		INSERT INTO users (id, username, email, password_hash, role, selected_avatar_id, is_active)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, userID, strings.TrimSpace(input.Username), strings.TrimSpace(input.Email), string(passwordHash), role, input.SelectedAvatarID, isActive)
+	`, userID, strings.TrimSpace(input.Username), strings.TrimSpace(input.Email), string(passwordHash), role, selectedAvatarID, isActive)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user: " + err.Error()})
 		return
@@ -199,6 +204,124 @@ func UpdateMyAvatar(c *gin.Context) {
 
 	middleware.LogAction(middleware.CurrentUserID(c), "SELECT_AVATAR", "Updated avatar selection")
 	c.JSON(http.StatusOK, gin.H{"message": "Avatar updated successfully"})
+}
+
+func UpdateMyProfile(c *gin.Context) {
+	var input struct {
+		Username        string `json:"username" binding:"required"`
+		CurrentPassword string `json:"current_password" binding:"required"`
+		NewPassword     string `json:"new_password"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID := middleware.CurrentUserID(c)
+	var user models.User
+	err := database.DB.QueryRow(`
+		SELECT id, username, email, password_hash, role, selected_avatar_id, is_active, created_at, updated_at
+		FROM users
+		WHERE id = $1
+	`, userID).Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+		&user.PasswordHash,
+		&user.Role,
+		&user.SelectedAvatarID,
+		&user.IsActive,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.CurrentPassword)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Current password is incorrect"})
+		return
+	}
+
+	username := strings.TrimSpace(input.Username)
+	if username == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "username is required"})
+		return
+	}
+
+	newPassword := strings.TrimSpace(input.NewPassword)
+	tx, err := database.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start profile update"})
+		return
+	}
+	defer tx.Rollback()
+
+	if newPassword != "" {
+		passwordHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+			return
+		}
+
+		_, err = tx.Exec(`
+			UPDATE users
+			SET username = $1, password_hash = $2, updated_at = NOW()
+			WHERE id = $3
+		`, username, string(passwordHash), userID)
+		if err != nil {
+			if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+				c.JSON(http.StatusConflict, gin.H{"error": "username already exists"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
+			return
+		}
+	} else {
+		_, err = tx.Exec(`
+			UPDATE users
+			SET username = $1, updated_at = NOW()
+			WHERE id = $2
+		`, username, userID)
+		if err != nil {
+			if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+				c.JSON(http.StatusConflict, gin.H{"error": "username already exists"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
+			return
+		}
+	}
+
+	if _, err := tx.Exec(`
+		UPDATE documents
+		SET author_name = $1, updated_at = NOW()
+		WHERE author_id = $2
+	`, username, userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to sync authored documents"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize profile update"})
+		return
+	}
+
+	user.Username = username
+	middleware.LogAction(userID, "UPDATE_PROFILE", "Updated own profile")
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Profile updated successfully",
+		"user": gin.H{
+			"id":                 user.ID,
+			"username":           user.Username,
+			"email":              user.Email,
+			"role":               user.Role,
+			"selected_avatar_id": user.SelectedAvatarID,
+			"is_active":          user.IsActive,
+		},
+	})
 }
 
 func validateAvatarSelection(avatarID string) error {

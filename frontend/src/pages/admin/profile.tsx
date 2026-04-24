@@ -22,7 +22,11 @@ export default function ProfilePage() {
   const [avatars, setAvatars] = useState<AvatarRecord[]>([]);
   const [selectedAvatarID, setSelectedAvatarID] = useState('');
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [avatarSaving, setAvatarSaving] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileUsername, setProfileUsername] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -35,6 +39,7 @@ export default function ProfilePage() {
 
     setUser(session.user);
     setSelectedAvatarID(session.user.selected_avatar_id || '');
+    setProfileUsername(session.user.username || '');
     void loadAvatars(session.token);
   }, [router]);
 
@@ -53,7 +58,7 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSave = async () => {
+  const handleSaveAvatar = async () => {
     const session = getAuthSession();
     if (!session) {
       void router.push('/login');
@@ -65,7 +70,7 @@ export default function ProfilePage() {
       return;
     }
 
-    setSaving(true);
+    setAvatarSaving(true);
     setError('');
     setMessage('');
 
@@ -86,7 +91,54 @@ export default function ProfilePage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update avatar');
     } finally {
-      setSaving(false);
+      setAvatarSaving(false);
+    }
+  };
+
+  const handleSaveProfile = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    const session = getAuthSession();
+    if (!session) {
+      void router.push('/login');
+      return;
+    }
+
+    if (!profileUsername.trim()) {
+      setError('Name is required.');
+      return;
+    }
+
+    if (!currentPassword.trim()) {
+      setError('Current password is required.');
+      return;
+    }
+
+    setProfileSaving(true);
+    setError('');
+    setMessage('');
+
+    try {
+      const data = await apiRequest<{ message: string; user: AuthUser }>('/api/me/profile', {
+        method: 'PUT',
+        token: session.token,
+        json: {
+          username: profileUsername.trim(),
+          current_password: currentPassword,
+          new_password: newPassword,
+        },
+      });
+
+      updateStoredUser(data.user);
+      setUser(data.user);
+      setProfileUsername(data.user.username);
+      setCurrentPassword('');
+      setNewPassword('');
+      setMessage('Profile details updated.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update profile');
+    } finally {
+      setProfileSaving(false);
     }
   };
 
@@ -104,7 +156,7 @@ export default function ProfilePage() {
         <header className="admin-page-header">
           <div>
             <span className="admin-dashboard-kicker">Profile</span>
-            <h1>Choose a curated avatar.</h1>
+            <h2>Choose a curated avatar.</h2>
             <p>
               Members can only select from the approved library. Admins can manage the full
               gallery from the avatar library screen.
@@ -120,8 +172,8 @@ export default function ProfilePage() {
         {error ? <p className="admin-page-feedback is-error">{error}</p> : null}
         {message ? <p className="admin-page-feedback is-success">{message}</p> : null}
 
-        <section className="admin-management-layout">
-          <section className="admin-management-main">
+        <section className="admin-management-layout admin-profile-layout">
+          <section className="admin-management-main admin-profile-main">
             <div className="admin-management-head">
               <div>
                 <span className="admin-dashboard-label">Avatar Library</span>
@@ -150,14 +202,57 @@ export default function ProfilePage() {
             )}
           </section>
 
-          <aside className="admin-management-sidebar">
+          <aside className="admin-management-sidebar admin-profile-sidebar">
             <section className="admin-sidebar-section">
               <span className="admin-dashboard-label">Selection</span>
               <h3>Current avatar</h3>
-              <p>Pick one approved image and save it to your account profile.</p>
-              <button type="button" onClick={handleSave} disabled={saving} className="admin-editor-publish">
-                {saving ? 'Saving...' : 'Save Avatar'}
+              <p>Pick one image and save it to your account profile.</p>
+              <button
+                type="button"
+                onClick={handleSaveAvatar}
+                disabled={avatarSaving}
+                className="admin-editor-publish"
+              >
+                {avatarSaving ? 'Saving...' : 'Save Avatar'}
               </button>
+            </section>
+
+            <section className="admin-sidebar-section">
+              <span className="admin-dashboard-label">Account</span>
+              <h3>Update profile</h3>
+              <p>Change your display name or set a new password. Current password is required.</p>
+              <form onSubmit={handleSaveProfile} className="admin-form-stack">
+                <label className="admin-editor-field">
+                  <span>Name</span>
+                  <input
+                    type="text"
+                    value={profileUsername}
+                    onChange={(event) => setProfileUsername(event.target.value)}
+                    required
+                  />
+                </label>
+                <label className="admin-editor-field">
+                  <span>Current Password</span>
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(event) => setCurrentPassword(event.target.value)}
+                    required
+                  />
+                </label>
+                <label className="admin-editor-field">
+                  <span>New Password</span>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    placeholder="Leave empty to keep current password"
+                  />
+                </label>
+                <button type="submit" disabled={profileSaving} className="admin-editor-publish">
+                  {profileSaving ? 'Saving...' : 'Save Profile'}
+                </button>
+              </form>
             </section>
           </aside>
         </section>

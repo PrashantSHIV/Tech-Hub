@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Head from 'next/head';
 import Header from '@/components/Header';
 import AdminNav from '@/components/AdminNav';
-import { apiRequest } from '@/lib/api';
+import { apiRequest, API_BASE_URL } from '@/lib/api';
 import { getAuthSession, type AuthUser } from '@/lib/auth';
 
 type UserRecord = {
@@ -25,7 +25,7 @@ type UserForm = {
   username: string;
   email: string;
   password: string;
-  role: 'ADMIN' | 'MEMBER';
+  role: '' | 'ADMIN' | 'MEMBER';
   selected_avatar_id: string;
   is_active: boolean;
 };
@@ -34,7 +34,7 @@ const initialForm: UserForm = {
   username: '',
   email: '',
   password: '',
-  role: 'MEMBER',
+  role: '',
   selected_avatar_id: '',
   is_active: true,
 };
@@ -45,6 +45,7 @@ export default function AdminUsersPage() {
   const [avatars, setAvatars] = useState<AvatarRecord[]>([]);
   const [form, setForm] = useState<UserForm>(initialForm);
   const [editingID, setEditingID] = useState<string | null>(null);
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -88,10 +89,12 @@ export default function AdminUsersPage() {
   const resetForm = () => {
     setForm(initialForm);
     setEditingID(null);
+    setAvatarPickerOpen(false);
   };
 
   const handleEdit = (record: UserRecord) => {
     setEditingID(record.id);
+    setAvatarPickerOpen(false);
     setForm({
       username: record.username,
       email: record.email,
@@ -154,6 +157,16 @@ export default function AdminUsersPage() {
     }
   };
 
+  const selectedAvatar =
+    avatars.find((avatar) => avatar.id === form.selected_avatar_id) || null;
+
+  const isCreateFormValid =
+    form.username.trim() !== '' &&
+    form.email.trim() !== '' &&
+    form.password.trim() !== '' &&
+    form.role !== '' &&
+    form.selected_avatar_id !== '';
+
   return (
     <div className="admin-dashboard-page">
       <Head>
@@ -168,7 +181,7 @@ export default function AdminUsersPage() {
         <header className="admin-page-header">
           <div>
             <span className="admin-dashboard-kicker">Admin</span>
-            <h1>User and role management.</h1>
+            <h2>User and role management.</h2>
             <p>Create new members or admins, assign curated avatars, and control account status.</p>
           </div>
           <div className="admin-page-header-meta">
@@ -180,8 +193,8 @@ export default function AdminUsersPage() {
         {error ? <p className="admin-page-feedback is-error">{error}</p> : null}
         {message ? <p className="admin-page-feedback is-success">{message}</p> : null}
 
-        <section className="admin-management-layout">
-          <section className="admin-management-main">
+        <section className="admin-management-layout admin-users-layout">
+          <section className="admin-management-main admin-users-main">
             <div className="admin-management-head">
               <div>
                 <span className="admin-dashboard-label">Accounts</span>
@@ -217,7 +230,7 @@ export default function AdminUsersPage() {
             </div>
           </section>
 
-          <aside className="admin-management-sidebar">
+          <aside className="admin-management-sidebar admin-users-sidebar">
             <section className="admin-sidebar-section">
               <span className="admin-dashboard-label">{editingID ? 'Edit User' : 'New User'}</span>
               <h3>{editingID ? 'Update account' : 'Create account'}</h3>
@@ -254,26 +267,75 @@ export default function AdminUsersPage() {
                   <select
                     className="admin-editor-select"
                     value={form.role}
-                    onChange={(event) => setField('role', event.target.value as 'ADMIN' | 'MEMBER')}
+                    onChange={(event) => setField('role', event.target.value as UserForm['role'])}
+                    required
                   >
+                    <option value="" disabled>
+                      Select role
+                    </option>
                     <option value="MEMBER">MEMBER</option>
                     <option value="ADMIN">ADMIN</option>
                   </select>
                 </label>
                 <label className="admin-editor-field">
                   <span>Curated Avatar</span>
-                  <select
-                    className="admin-editor-select"
-                    value={form.selected_avatar_id}
-                    onChange={(event) => setField('selected_avatar_id', event.target.value)}
-                  >
-                    <option value="">No avatar selected</option>
-                    {avatars.map((avatar) => (
-                      <option key={avatar.id} value={avatar.id}>
-                        {avatar.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="admin-avatar-picker">
+                    <button
+                      type="button"
+                      className={`admin-avatar-picker-trigger${avatarPickerOpen ? ' is-open' : ''}`}
+                      onClick={() => setAvatarPickerOpen((current) => !current)}
+                    >
+                      <div className="admin-avatar-picker-trigger-main">
+                        {selectedAvatar ? (
+                          <div className="admin-avatar-picker-selected">
+                            <span className="admin-avatar-picker-thumb">
+                              <img src={`${API_BASE_URL}${selectedAvatar.path}`} alt={selectedAvatar.name} />
+                            </span>
+                            <span className="admin-avatar-picker-text">{selectedAvatar.name}</span>
+                          </div>
+                        ) : (
+                          <span className="admin-avatar-picker-placeholder">No avatar selected</span>
+                        )}
+                      </div>
+                      <span className="admin-avatar-picker-arrow" aria-hidden="true">
+                        {avatarPickerOpen ? '>' : '>'}
+                      </span>
+                    </button>
+
+                    {avatarPickerOpen ? (
+                      <div className="admin-avatar-picker-menu">
+                        <button
+                          type="button"
+                          className={`admin-avatar-picker-option is-empty${!form.selected_avatar_id ? ' is-selected' : ''}`}
+                          onClick={() => {
+                            setField('selected_avatar_id', '');
+                            setAvatarPickerOpen(false);
+                          }}
+                        >
+                          <span className="admin-avatar-picker-placeholder">No avatar selected</span>
+                        </button>
+
+                        <div className="admin-avatar-picker-grid">
+                          {avatars.map((avatar) => (
+                            <button
+                              key={avatar.id}
+                              type="button"
+                              className={`admin-avatar-picker-option${form.selected_avatar_id === avatar.id ? ' is-selected' : ''}`}
+                              onClick={() => {
+                                setField('selected_avatar_id', avatar.id);
+                                setAvatarPickerOpen(false);
+                              }}
+                            >
+                              <span className="admin-avatar-picker-card-image">
+                                <img src={`${API_BASE_URL}${avatar.path}`} alt={avatar.name} />
+                              </span>
+                              <span className="admin-avatar-picker-card-name">{avatar.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                 </label>
                 <label className="admin-checkbox-row">
                   <input
@@ -285,7 +347,11 @@ export default function AdminUsersPage() {
                 </label>
 
                 <div className="admin-form-actions">
-                  <button type="submit" className="admin-editor-publish" disabled={saving}>
+                  <button
+                    type="submit"
+                    className="admin-editor-publish"
+                    disabled={saving || (!editingID && !isCreateFormValid)}
+                  >
                     {saving ? 'Saving...' : editingID ? 'Update User' : 'Create User'}
                   </button>
                   {editingID ? (

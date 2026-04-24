@@ -78,6 +78,70 @@ func UploadAvatar(c *gin.Context) {
 	})
 }
 
+func UpdateAvatar(c *gin.Context) {
+	avatarID := c.Param("id")
+
+	var existingPath string
+	var existingName string
+	err := database.DB.QueryRow(`
+		SELECT path, name
+		FROM avatar_library
+		WHERE id = $1
+	`, avatarID).Scan(&existingPath, &existingName)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Avatar not found"})
+		return
+	}
+
+	name := strings.TrimSpace(c.PostForm("name"))
+	if name == "" {
+		name = existingName
+	}
+
+	file, fileErr := c.FormFile("avatar")
+	newPath := existingPath
+	oldAbsolutePath := strings.TrimPrefix(existingPath, "/")
+	newAbsolutePath := ""
+
+	if fileErr == nil {
+		filename := avatarID + "_" + sanitizeFilename(file.Filename)
+		relativePath := filepath.ToSlash(filepath.Join("assets", "avatars", filename))
+		newPath = "/" + relativePath
+		newAbsolutePath = filepath.Join("assets", "avatars", filename)
+
+		if err := c.SaveUploadedFile(file, newAbsolutePath); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save updated avatar"})
+			return
+		}
+	} else if fileErr != http.ErrMissingFile {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid avatar file"})
+		return
+	}
+
+	if _, err := database.DB.Exec(`
+		UPDATE avatar_library
+		SET path = $1, name = $2
+		WHERE id = $3
+	`, newPath, name, avatarID); err != nil {
+		if newAbsolutePath != "" {
+			_ = os.Remove(newAbsolutePath)
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update avatar metadata"})
+		return
+	}
+
+	if newAbsolutePath != "" && newPath != existingPath {
+		_ = os.Remove(oldAbsolutePath)
+	}
+
+	middleware.LogAction(middleware.CurrentUserID(c), "UPDATE_AVATAR", "Updated avatar: "+avatarID)
+	c.JSON(http.StatusOK, gin.H{
+		"id":   avatarID,
+		"path": newPath,
+		"name": name,
+	})
+}
+
 func DeleteAvatar(c *gin.Context) {
 	avatarID := c.Param("id")
 
