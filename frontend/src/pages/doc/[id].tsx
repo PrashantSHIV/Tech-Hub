@@ -1,16 +1,31 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import Head from 'next/head';
 import Header from '@/components/Header';
 import { API_BASE_URL } from '@/lib/api';
+import DocumentContent from '@/components/DocumentContent';
+import { normalizeContentBlocks } from '@/lib/content-blocks';
+
+type PublicDocument = {
+  id: string;
+  title: string;
+  description: string;
+  content?: string;
+  content_json?: unknown;
+  author?: string;
+  author_avatar?: string;
+  category?: string;
+  tags?: string;
+  readTime?: string;
+  created_at?: string;
+  updated_at?: string;
+};
 
 export default function DocDetail() {
   const router = useRouter();
   const { id } = router.query;
-  const [doc, setDoc] = useState<any>(null);
+  const [doc, setDoc] = useState<PublicDocument | null>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [commenterName, setCommenterName] = useState("");
   const [stars, setStars] = useState(0);
@@ -18,10 +33,7 @@ export default function DocDetail() {
   const [suggestionText, setSuggestionText] = useState("");
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(true);
-  const [activeHeading, setActiveHeading] = useState("");
   const [feedbackTab, setFeedbackTab] = useState<'review' | 'suggestion'>('review');
-
-  const headingsRef = useRef<any[]>([]);
 
   useEffect(() => {
     if (id) {
@@ -34,7 +46,7 @@ export default function DocDetail() {
     try {
       const resDoc = await fetch(`http://localhost:8080/api/docs/${id}`);
       if (!resDoc.ok) throw new Error("Doc not found");
-      const docData = await resDoc.json();
+      const docData = (await resDoc.json()) as PublicDocument;
       setDoc(docData);
 
       const resComments = await fetch(`http://localhost:8080/api/docs/${id}/comments`);
@@ -78,39 +90,10 @@ export default function DocDetail() {
     }
   };
 
-  const slugify = (text: any) => {
-    const extractText = (node: any): string => {
-      if (!node) return "";
-      if (typeof node === 'string') return node;
-      if (Array.isArray(node)) return node.map(extractText).join('');
-      if (node.props && node.props.children) return extractText(node.props.children);
-      return String(node);
-    };
-    
-    const plainText = extractText(text);
-    return plainText
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/^-+|-+$/g, '');
-  };
-
-  const extractHeadings = (markdown: string) => {
-    const lines = markdown.split('\n');
-    const extracted: { id: string, text: string, level: number }[] = [];
-    lines.forEach(line => {
-      const match = line.match(/^(#{1,3})\s+(.*)/);
-      if (match) {
-        const level = match[1].length;
-        const text = match[2].trim();
-        const id = slugify(text);
-        extracted.push({ id, text, level });
-      }
-    });
-    return extracted;
-  };
-
-  const headings = doc ? extractHeadings(doc.content) : [];
+  const contentBlocks = useMemo(
+    () => (doc ? normalizeContentBlocks(doc.content_json, doc.content || '') : []),
+    [doc],
+  );
   const authorAvatarSrc = doc?.author_avatar
     ? `${API_BASE_URL}${doc.author_avatar}`
     : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(doc?.author || 'Author') + '&background=f3f4f6&color=111827';
@@ -123,118 +106,6 @@ export default function DocDetail() {
     .split(',')
     .map((item: string) => item.trim())
     .filter(Boolean);
-
-  useEffect(() => {
-    if (!doc) return;
-
-    let observer: IntersectionObserver;
-    
-    const timer = setTimeout(() => {
-      observer = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              setActiveHeading(entry.target.id);
-            }
-          });
-        },
-        { 
-          rootMargin: '0px 0px -80% 0px',
-          threshold: 0
-        }
-      );
-
-      const headingElements = document.querySelectorAll('h1[id], h2[id], h3[id]');
-      headingElements.forEach((el) => observer.observe(el));
-    }, 1000);
-
-    return () => {
-      clearTimeout(timer);
-      if (observer) observer.disconnect();
-    };
-  }, [doc?.id]);
-
-  const scrollToHeading = (headingId: string) => {
-    const element = document.getElementById(headingId);
-    if (element) {
-      const headerOffset = 100;
-      const elementPosition = element.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: "smooth"
-      });
-      setActiveHeading(headingId);
-    }
-  };
-
-  const CodeBlock = ({ children }: { children: any }) => {
-    const [copied, setCopied] = useState(false);
-    const codeRef = useRef<HTMLPreElement>(null);
-
-    const handleCopy = () => {
-      const text = codeRef.current?.innerText || "";
-      navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    };
-
-    return (
-      <div style={{ position: 'relative' }} className="code-block-container group">
-        <button 
-          onClick={handleCopy}
-          className="copy-button"
-          style={{
-            position: 'absolute',
-            top: '12px',
-            right: '12px',
-            background: copied ? '#22c55e' : 'rgba(255,255,255,0.05)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: '6px',
-            color: '#fff',
-            fontSize: '11px',
-            fontWeight: '700',
-            padding: '4px 10px',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            zIndex: 10,
-            fontFamily: 'Inter, sans-serif',
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
-            opacity: copied ? 1 : 0,
-            visibility: copied ? 'visible' : 'hidden'
-          }}
-        >
-          {copied ? 'Copied!' : 'Copy'}
-        </button>
-        <style jsx>{`
-          .code-block-container:hover .copy-button {
-            opacity: 1 !important;
-            visibility: visible !important;
-          }
-        `}</style>
-        <pre 
-          ref={codeRef}
-          style={{
-            background: '#0d1117',
-            color: '#e6edf3',
-            padding: '24px',
-            borderRadius: '16px',
-            overflowX: 'auto',
-            margin: '2em 0',
-            border: '1px solid #30363d',
-            boxShadow: '0 8px 30px rgba(0,0,0,0.1)',
-            fontSize: '14px',
-            lineHeight: '1.6',
-            fontFamily: 'SFMono-Regular, Consolas, monospace'
-          }}
-        >
-          {children}
-        </pre>
-      </div>
-    );
-  };
 
   if (loading) return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', fontFamily: 'Inter, sans-serif' }}>
@@ -441,50 +312,7 @@ export default function DocDetail() {
               lineHeight: '1.6', 
               color: '#374151',
             }}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                h1: ({node, ...props}) => {
-                  const id = slugify(props.children);
-                  return <h1 id={id} style={{fontSize: '24px', fontWeight: '800', marginTop: '1.5em', marginBottom: '0.8em', color: '#1a1a1a', letterSpacing: '-1px', lineHeight: '1.2', fontFamily: "'Plus Jakarta Sans', sans-serif"}} {...props} />;
-                },
-                h2: ({node, ...props}) => {
-                  const id = slugify(props.children);
-                   return <h2 id={id} style={{fontSize: '20px', fontWeight: '800', marginTop: '2em', marginBottom: '0.6em', color: '#1a1a1a', letterSpacing: '-0.5px', lineHeight: '1.2', fontFamily: "'Plus Jakarta Sans', sans-serif"}} {...props} />;
-                },
-                h3: ({node, ...props}) => {
-                  const id = slugify(props.children);
-                  return <h3 id={id} style={{fontSize: '20px', fontWeight: '700', marginTop: '1.5em', marginBottom: '0.5em', color: '#1a1a1a', letterSpacing: '-0.3px', fontFamily: "'Plus Jakarta Sans', sans-serif"}} {...props} />;
-                },
-                p: ({node, ...props}) => <p style={{marginBottom: '1.4em', color: '#374151', fontSize: '16px'}} {...props} />,
-                code: ({node, className, children, ...props}: any) => {
-                  const match = /language-(\w+)/.exec(className || '');
-                  const isInline = !match;
-                  if (isInline) {
-                    return <code style={{background: '#f6f8fa', padding: '0.2em 0.4em', borderRadius: '6px', fontSize: '14px', color: '#cf222e', fontFamily: 'SFMono-Regular, Consolas, monospace'}} {...props}>{children}</code>;
-                  }
-                  return <code className={className} {...props}>{children}</code>;
-                },
-                pre: ({node, ...props}) => <CodeBlock>{props.children}</CodeBlock>,
-                blockquote: ({node, ...props}) => (
-                  <blockquote style={{
-                    margin: '2em 0',
-                    padding: '1.2em 1.8em',
-                    color: '#636e7b',
-                    borderLeft: '4px solid #d0d7de',
-                    background: '#fcfcfc',
-                    borderRadius: '0 12px 12px 0',
-                    fontStyle: 'italic',
-                    fontSize: '16px'
-                  }} {...props} />
-                ),
-                ul: ({node, ...props}) => <ul style={{marginBottom: '1.5em', paddingLeft: '1.5em', listStyleType: 'disc'}} {...props} />,
-                ol: ({node, ...props}) => <ol style={{marginBottom: '1.5em', paddingLeft: '1.5em', listStyleType: 'decimal'}} {...props} />,
-                li: ({node, ...props}) => <li style={{marginBottom: '0.6em', color: '#374151', fontSize: '16px'}} {...props} />,
-                table: ({node, ...props}) => <table style={{width: '100%', borderCollapse: 'collapse', margin: '2em 0', fontSize: '15px', border: '1px solid #eee'}} {...props} />,
-                th: ({node, ...props}) => <th style={{padding: '10px 14px', background: '#f6f8fa', fontWeight: '700', border: '1px solid #eee', textAlign: 'left'}} {...props} />,
-                td: ({node, ...props}) => <td style={{padding: '10px 14px', border: '1px solid #eee'}} {...props} />,
-              }}>
-                {doc.content}
-              </ReactMarkdown>
+              <DocumentContent blocks={contentBlocks} />
             </div>
 
             {/* End of Documentation Section */}

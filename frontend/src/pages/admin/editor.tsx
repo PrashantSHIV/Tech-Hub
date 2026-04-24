@@ -2,10 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import Header from '@/components/Header';
 import AdminNav from '@/components/AdminNav';
+import DocumentContent from '@/components/DocumentContent';
 import { API_BASE_URL, apiRequest } from '@/lib/api';
 import { getAuthSession, type AuthUser } from '@/lib/auth';
 import {
@@ -363,35 +362,11 @@ export default function Editor() {
     : `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName || 'Author')}&background=f3f4f6&color=111827`;
 
   const renderPreviewContent = () => (
-    <div className="admin-editor-preview-body">
-      {previewBlocks.length === 0 ? (
-        <p>Start writing to preview the document here.</p>
-      ) : (
-        previewBlocks.map((block, index) => {
-          if (block.type === 'text') {
-            return (
-              <ReactMarkdown key={`${block.type}-${index}`} remarkPlugins={[remarkGfm]}>
-                {block.markdown}
-              </ReactMarkdown>
-            );
-          }
-
-          return (
-            <div
-              key={`${block.type}-${index}`}
-              className={`admin-editor-preview-image-row is-${block.layout}`}
-            >
-              {block.images.map((image, imageIndex) => (
-                <figure key={`${image.url}-${imageIndex}`}>
-                  <img src={image.url} alt={image.alt || `Row image ${imageIndex + 1}`} />
-                  {image.caption ? <figcaption>{image.caption}</figcaption> : null}
-                </figure>
-              ))}
-            </div>
-          );
-        })
-      )}
-    </div>
+    <DocumentContent
+      blocks={previewBlocks}
+      className="admin-editor-preview-body"
+      emptyState={<p>Start writing to preview the document here.</p>}
+    />
   );
 
   const feedbackPanel = isExistingDoc ? (
@@ -599,12 +574,6 @@ export default function Editor() {
                 <h1>{doc.title || 'Untitled document'}</h1>
                 {doc.description ? (
                   <p className="admin-editor-preview-description">{doc.description}</p>
-                ) : null}
-
-                {doc.image ? (
-                  <div className="admin-editor-feature-image">
-                    <img src={doc.image} alt={doc.title || 'Document feature'} />
-                  </div>
                 ) : null}
 
                 {renderPreviewContent()}

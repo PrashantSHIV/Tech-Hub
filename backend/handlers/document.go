@@ -279,7 +279,6 @@ func GetDocument(c *gin.Context) {
 		return
 	}
 
-	doc.ContentJSON = nil
 	doc.Status = ""
 	doc.AuthorID = ""
 	c.JSON(http.StatusOK, doc)
