@@ -134,7 +134,6 @@ export default function DocDetail() {
     } as any}>
       <Head>
         <title>{doc.title} | Tech Hobby</title>
-        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
       </Head>
 
       <Header />
@@ -196,7 +195,9 @@ export default function DocDetail() {
                     zIndex: 2
                   }}></div>
                   <span style={{ fontSize: '10px', color: '#888', textTransform: 'uppercase', display: 'block', fontWeight: '700', letterSpacing: '0.5px', marginBottom: '2px' }}>Published</span>
-                  <span style={{ fontSize: '13px', color: '#1a1a1a', fontWeight: '600' }}>{new Date(doc.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                  <span style={{ fontSize: '13px', color: '#1a1a1a', fontWeight: '600' }}>
+                    {formatDisplayDate(doc.created_at)}
+                  </span>
                 </div>
 
                 {/* Updated Date (Optional) */}
@@ -214,7 +215,9 @@ export default function DocDetail() {
                       zIndex: 2
                     }}></div>
                     <span style={{ fontSize: '10px', color: '#888', textTransform: 'uppercase', display: 'block', fontWeight: '700', letterSpacing: '0.5px', marginBottom: '2px' }}>Latest Update</span>
-                    <span style={{ fontSize: '13px', color: '#1a1a1a', fontWeight: '600' }}>{new Date(doc.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    <span style={{ fontSize: '13px', color: '#1a1a1a', fontWeight: '600' }}>
+                      {formatDisplayDate(doc.updated_at)}
+                    </span>
                   </div>
                 )}
               </div>
@@ -292,7 +295,7 @@ export default function DocDetail() {
             <div style={{ margin: 0, padding: 0, marginBottom: '40px' }}>
               <h1 style={{ 
                 fontFamily: "'Plus Jakarta Sans', sans-serif", 
-                fontSize: '30px', 
+                fontSize: '20px',
                 fontWeight: '800',
                 lineHeight: '1.2', 
                 color: '#1a1a1a',
@@ -630,4 +633,16 @@ function toTitleCase(value: string) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join(' ');
+}
+
+function formatDisplayDate(date?: string) {
+  if (!date) {
+    return '';
+  }
+
+  return new Date(date).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
