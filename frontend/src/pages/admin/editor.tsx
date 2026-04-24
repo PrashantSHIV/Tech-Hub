@@ -35,6 +35,17 @@ type ManagedDocumentResponse = EditorDoc & {
   author?: string;
 };
 
+type FeedbackItem = {
+  id: string;
+  doc_id: string;
+  commenter_name: string;
+  stars: number;
+  comment: string;
+  type: 'comment' | 'suggestion';
+  is_approved: boolean;
+  created_at: string;
+};
+
 const initialDoc: EditorDoc = {
   title: '',
   description: '',
@@ -54,6 +65,9 @@ export default function Editor() {
   const [blocks, setBlocks] = useState<ContentBlock[]>([createTextBlock()]);
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  const [feedbackItems, setFeedbackItems] = useState<FeedbackItem[]>([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackError, setFeedbackError] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -68,6 +82,8 @@ export default function Editor() {
 
     if (typeof id !== 'string') {
       setInitializing(false);
+      setFeedbackItems([]);
+      setFeedbackError('');
       return;
     }
 
@@ -94,10 +110,47 @@ export default function Editor() {
       });
       setAuthorName(data.author || '');
       setBlocks(normalizeContentBlocks(data.content_json, data.content || ''));
+      await loadFeedback(token, documentID);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load document');
     } finally {
       setInitializing(false);
+    }
+  };
+
+  const loadFeedback = async (token: string, documentID: string) => {
+    setFeedbackLoading(true);
+    setFeedbackError('');
+
+    try {
+      const data = await apiRequest<FeedbackItem[]>(`/api/admin/docs/${documentID}/interactions`, {
+        token,
+      });
+      setFeedbackItems(data || []);
+    } catch (err) {
+      setFeedbackItems([]);
+      setFeedbackError(err instanceof Error ? err.message : 'Failed to load feedback');
+    } finally {
+      setFeedbackLoading(false);
+    }
+  };
+
+  const handleApproveComment = async (interactionID: string) => {
+    const session = getAuthSession();
+    if (!session || typeof id !== 'string') {
+      return;
+    }
+
+    setFeedbackError('');
+
+    try {
+      await apiRequest<{ message: string }>(`/api/admin/comments/${interactionID}/approve`, {
+        method: 'POST',
+        token: session.token,
+      });
+      await loadFeedback(session.token, id);
+    } catch (err) {
+      setFeedbackError(err instanceof Error ? err.message : 'Failed to approve comment');
     }
   };
 
@@ -210,6 +263,14 @@ export default function Editor() {
   };
 
   const previewBlocks = useMemo(() => serializeContentBlocks(blocks), [blocks]);
+  const reviewItems = useMemo(
+    () => feedbackItems.filter((item) => item.type === 'comment'),
+    [feedbackItems],
+  );
+  const suggestionItems = useMemo(
+    () => feedbackItems.filter((item) => item.type === 'suggestion'),
+    [feedbackItems],
+  );
 
   return (
     <div className="admin-editor-page">
@@ -456,6 +517,96 @@ export default function Editor() {
                 )}
               </div>
             </article>
+
+            {typeof id === 'string' ? (
+              <section className="admin-editor-feedback-panel">
+                <div className="admin-editor-section-head">
+                  <span className="admin-editor-kicker">Owner Feedback</span>
+                  <span className="admin-editor-section-note">
+                    Only the content owner can review this queue
+                  </span>
+                </div>
+
+                {feedbackError ? (
+                  <p className="admin-editor-feedback is-error">{feedbackError}</p>
+                ) : null}
+
+                <div className="admin-editor-feedback-groups">
+                  <div className="admin-editor-feedback-group">
+                    <div className="admin-editor-feedback-head">
+                      <h3>Reviews</h3>
+                      <span>{reviewItems.length}</span>
+                    </div>
+
+                    {feedbackLoading ? (
+                      <p className="admin-editor-feedback-empty">Loading reviews…</p>
+                    ) : reviewItems.length === 0 ? (
+                      <p className="admin-editor-feedback-empty">No reviews yet.</p>
+                    ) : (
+                      <div className="admin-editor-feedback-list">
+                        {reviewItems.map((item) => (
+                          <article key={item.id} className="admin-editor-feedback-card">
+                            <div className="admin-editor-feedback-card-top">
+                              <div>
+                                <strong className="admin-editor-feedback-name">{item.commenter_name}</strong>
+                                <div className="admin-editor-feedback-stars">
+                                  {'★★★★★'.slice(0, item.stars)}
+                                  <span>{'★★★★★'.slice(item.stars)}</span>
+                                </div>
+                              </div>
+                              <span className={`admin-editor-feedback-status${item.is_approved ? ' is-approved' : ''}`}>
+                                {item.is_approved ? 'Approved' : 'Pending'}
+                              </span>
+                            </div>
+                            <p>{item.comment}</p>
+                            <div className="admin-editor-feedback-card-bottom">
+                              <time>{new Date(item.created_at).toLocaleDateString()}</time>
+                              {!item.is_approved ? (
+                                <button
+                                  type="button"
+                                  className="admin-editor-feedback-action"
+                                  onClick={() => handleApproveComment(item.id)}
+                                >
+                                  Approve
+                                </button>
+                              ) : null}
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="admin-editor-feedback-group">
+                    <div className="admin-editor-feedback-head">
+                      <h3>Private Suggestions</h3>
+                      <span>{suggestionItems.length}</span>
+                    </div>
+
+                    {feedbackLoading ? (
+                      <p className="admin-editor-feedback-empty">Loading suggestions…</p>
+                    ) : suggestionItems.length === 0 ? (
+                      <p className="admin-editor-feedback-empty">No private suggestions yet.</p>
+                    ) : (
+                      <div className="admin-editor-feedback-list">
+                        {suggestionItems.map((item) => (
+                          <article key={item.id} className="admin-editor-feedback-card">
+                            <div className="admin-editor-feedback-card-top">
+                              <div>
+                                <strong className="admin-editor-feedback-name">{item.commenter_name}</strong>
+                                <span className="admin-editor-feedback-status is-private">Private</span>
+                              </div>
+                              <time>{new Date(item.created_at).toLocaleDateString()}</time>
+                            </div>
+                            <p>{item.comment}</p>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </section>
+            ) : null}
           </aside>
         </section>
       </main>

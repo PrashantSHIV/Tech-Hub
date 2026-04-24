@@ -61,10 +61,11 @@ func main() {
 	{
 		adminDocs.GET("/docs", handlers.GetManagedDocuments)
 		adminDocs.GET("/docs/:id", handlers.GetManagedDocument)
+		adminDocs.GET("/docs/:id/interactions", handlers.GetOwnedInteractions)
 		adminDocs.POST("/docs", handlers.CreateDocument)
 		adminDocs.PUT("/docs/:id", handlers.UpdateDocument)
 		adminDocs.DELETE("/docs/:id", handlers.DeleteDocument)
-		adminDocs.POST("/comments/:id/approve", middleware.RequireRole("ADMIN"), handlers.ApproveComment)
+		adminDocs.POST("/comments/:id/approve", handlers.ApproveComment)
 	}
 
 	adminOnly := r.Group("/api/admin")

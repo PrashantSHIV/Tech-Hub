@@ -11,6 +11,7 @@ export default function DocDetail() {
   const { id } = router.query;
   const [doc, setDoc] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
+  const [commenterName, setCommenterName] = useState("");
   const [stars, setStars] = useState(0);
   const [commentText, setCommentText] = useState("");
   const [suggestionText, setSuggestionText] = useState("");
@@ -50,6 +51,7 @@ export default function DocDetail() {
   const handleSubmitFeedback = async (type: 'comment' | 'suggestion') => {
     const payload = {
       doc_id: id,
+      commenter_name: commenterName,
       stars: type === 'comment' ? stars : 0,
       comment: type === 'comment' ? commentText : suggestionText,
       type: type
@@ -63,6 +65,7 @@ export default function DocDetail() {
       });
       if (res.ok) {
         setMsg(type === 'comment' ? "Comment submitted for approval!" : "Suggestion sent to the team!");
+        setCommenterName("");
         if (type === 'comment') { setCommentText(""); setStars(0); }
         else { setSuggestionText(""); }
       } else {
@@ -624,6 +627,23 @@ export default function DocDetail() {
                   <div style={{ padding: '22px' }}>
                     {feedbackTab === 'review' ? (
                       <div>
+                        <input 
+                          type="text"
+                          placeholder="Your name"
+                          style={{ 
+                            width: '100%', 
+                            padding: '12px 14px', 
+                            borderRadius: '8px', 
+                            border: '1px solid #f0f0f0', 
+                            fontSize: '13px', 
+                            outline: 'none', 
+                            background: '#fcfcfc', 
+                            marginBottom: '14px', 
+                            fontFamily: 'Inter, sans-serif'
+                          }}
+                          value={commenterName}
+                          onChange={(e) => setCommenterName(e.target.value)}
+                        />
                         <div style={{ display: 'flex', gap: '6px', marginBottom: '18px', justifyContent: 'center' }}>
                           {[1, 2, 3, 4, 5].map(s => (
                             <span 
@@ -670,6 +690,23 @@ export default function DocDetail() {
                         <p style={{ fontSize: '12px', color: '#666', marginBottom: '16px', textAlign: 'center', lineHeight: '1.6' }}>
                           Notice a typo or have a technical correction? Send it to our editorial team.
                         </p>
+                        <input 
+                          type="text"
+                          placeholder="Your name"
+                          style={{ 
+                            width: '100%', 
+                            padding: '12px 14px', 
+                            borderRadius: '8px', 
+                            border: '1px solid #f0f0f0', 
+                            fontSize: '13px', 
+                            outline: 'none', 
+                            background: '#fcfcfc', 
+                            marginBottom: '14px', 
+                            fontFamily: 'Inter, sans-serif'
+                          }}
+                          value={commenterName}
+                          onChange={(e) => setCommenterName(e.target.value)}
+                        />
                         <textarea 
                           placeholder="Suggest a correction..."
                           style={{ 
@@ -739,6 +776,9 @@ export default function DocDetail() {
                               ))}
                             </div>
                             <div style={{ fontSize: '12px', color: '#aaa', fontWeight: '600' }}>{new Date(c.created_at).toLocaleDateString()}</div>
+                          </div>
+                          <div style={{ fontSize: '13px', color: '#1a1a1a', fontWeight: '700', marginBottom: '10px' }}>
+                            {toTitleCase(c.commenter_name || 'Anonymous')}
                           </div>
                           <p style={{ fontSize: '15px', color: '#374151', lineHeight: '1.6', fontFamily: 'Inter, sans-serif' }}>{c.comment}</p>
                         </div>

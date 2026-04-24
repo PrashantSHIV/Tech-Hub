@@ -127,21 +127,8 @@ export default function Login() {
           <Link href="/" className="admin-auth-brand">
             Tech Hobby
           </Link>
-          <span className="admin-auth-kicker">Team Workspace</span>
-          <h1>Documentation login for editors and admins.</h1>
-          <p>
-            Sign in with your username or email. Admins can manage people, avatars, and all
-            published or draft notes. Members can work on their own documentation and profile.
-          </p>
-          <div className="admin-auth-notes">
-            <div>
-              <strong>Auth</strong>
-              <span>JWT session with role-aware admin routes.</span>
-            </div>
-            <div>
-              <strong>Reset</strong>
-              <span>6-digit email OTP flow with a 10-minute expiry.</span>
-            </div>
+          <div className="admin-auth-hero-image">
+            <img src="/kid.jpg" alt="Kid illustration" />
           </div>
         </section>
 
@@ -151,7 +138,7 @@ export default function Login() {
               {view === 'login' ? 'Sign In' : 'Password Reset'}
             </span>
             <h2>
-              {view === 'login' && 'Access the admin workspace'}
+              {view === 'login' && 'Access the workspace'}
               {view === 'request' && 'Request reset OTP'}
               {view === 'verify' && 'Verify reset code'}
               {view === 'confirm' && 'Create a new password'}

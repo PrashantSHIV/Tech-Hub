@@ -154,10 +154,6 @@ export default function Dashboard() {
     });
   }, [docs, scope, searchQuery, user?.username]);
 
-  const filteredTopics = useMemo(() => {
-    return new Set(filteredDocs.flatMap((doc) => getDocTopics(doc))).size;
-  }, [filteredDocs]);
-
   return (
     <div className="admin-dashboard-page">
       <Head>
@@ -203,12 +199,15 @@ export default function Dashboard() {
         <section className="admin-dashboard-layout">
           <section className="admin-dashboard-main">
             <div className="admin-dashboard-section-head">
-              <div>
-                <span className="admin-dashboard-label">
-                  {scope === 'my' ? 'My Documentation' : user?.role === 'ADMIN' ? 'All Documentation' : 'Your Documentation'}
-                </span>
-                <h2>{filteredDocs.length} tracked {filteredDocs.length === 1 ? 'entry' : 'entries'}</h2>
-              </div>
+              <label className="admin-dashboard-search">
+                <span className="admin-dashboard-search-label">Search</span>
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search docs, authors, topics"
+                />
+              </label>
               <div className="admin-dashboard-tools">
                 {user?.role === 'ADMIN' ? (
                   <div className="admin-dashboard-tabs" role="tablist" aria-label="Document scope">
@@ -228,18 +227,6 @@ export default function Dashboard() {
                     </button>
                   </div>
                 ) : null}
-                <label className="admin-dashboard-search">
-                  <span className="admin-dashboard-search-label">Search</span>
-                  <input
-                    type="search"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Search docs, authors, topics"
-                  />
-                </label>
-                <span className="admin-dashboard-meta">
-                  {filteredTopics} active {filteredTopics === 1 ? 'topic' : 'topics'}
-                </span>
               </div>
             </div>
 
@@ -270,7 +257,7 @@ export default function Dashboard() {
 
                   return (
                     <article key={doc.id} className="admin-doc-card">
-                      <div className="admin-doc-card-main">
+                      <Link href={`/admin/editor?id=${doc.id}`} className="admin-doc-card-main">
                         <div className="admin-doc-card-meta">
                           <span>{doc.author || 'Unknown author'}</span>
                           <span>{formatDate(doc.updated_at || doc.created_at)}</span>
@@ -294,12 +281,9 @@ export default function Dashboard() {
                             <span className="admin-doc-chip is-muted">Uncategorized</span>
                           )}
                         </div>
-                      </div>
+                      </Link>
 
                       <div className="admin-doc-card-actions">
-                        <Link href={`/admin/editor?id=${doc.id}`} className="admin-doc-action-link">
-                          Edit
-                        </Link>
                         <button
                           type="button"
                           onClick={() => handleDelete(doc.id)}

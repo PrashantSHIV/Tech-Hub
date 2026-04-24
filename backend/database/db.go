@@ -220,6 +220,7 @@ func createSchema() {
 	CREATE TABLE IF NOT EXISTS interactions (
 		id UUID PRIMARY KEY,
 		doc_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+		commenter_name TEXT NOT NULL DEFAULT 'Anonymous',
 		stars INTEGER,
 		comment TEXT,
 		type TEXT NOT NULL,
@@ -227,6 +228,9 @@ func createSchema() {
 		ip_address TEXT NOT NULL,
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	);
+
+	ALTER TABLE interactions
+		ADD COLUMN IF NOT EXISTS commenter_name TEXT NOT NULL DEFAULT 'Anonymous';
 
 	CREATE INDEX IF NOT EXISTS idx_documents_status_created_at ON documents(status, created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_documents_author_id ON documents(author_id);

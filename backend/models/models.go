@@ -35,21 +35,21 @@ type PasswordResetOTP struct {
 }
 
 type Document struct {
-	ID          string          `json:"id"`
-	Title       string          `json:"title"`
-	Description string          `json:"description"`
-	Content     string          `json:"content,omitempty"`
-	ContentJSON json.RawMessage `json:"content_json,omitempty"`
-	AuthorID    string          `json:"author_id,omitempty"`
-	Author      string          `json:"author"`
-	AuthorAvatar string         `json:"author_avatar,omitempty"`
-	Tags        string          `json:"tags"`
-	Category    string          `json:"category"`
-	Image       string          `json:"image"`
-	ReadTime    string          `json:"readTime"`
-	Status      string          `json:"status,omitempty"`
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
+	ID           string          `json:"id"`
+	Title        string          `json:"title"`
+	Description  string          `json:"description"`
+	Content      string          `json:"content,omitempty"`
+	ContentJSON  json.RawMessage `json:"content_json,omitempty"`
+	AuthorID     string          `json:"author_id,omitempty"`
+	Author       string          `json:"author"`
+	AuthorAvatar string          `json:"author_avatar,omitempty"`
+	Tags         string          `json:"tags"`
+	Category     string          `json:"category"`
+	Image        string          `json:"image"`
+	ReadTime     string          `json:"readTime"`
+	Status       string          `json:"status,omitempty"`
+	CreatedAt    time.Time       `json:"created_at"`
+	UpdatedAt    time.Time       `json:"updated_at"`
 }
 
 type Log struct {
@@ -61,12 +61,13 @@ type Log struct {
 }
 
 type Interaction struct {
-	ID         string    `json:"id"`
-	DocID      string    `json:"doc_id"`
-	Stars      int       `json:"stars"`
-	Comment    string    `json:"comment"`
-	Type       string    `json:"type"`
-	IsApproved bool      `json:"is_approved"`
-	IPAddress  string    `json:"ip_address"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID            string    `json:"id"`
+	DocID         string    `json:"doc_id"`
+	CommenterName string    `json:"commenter_name"`
+	Stars         int       `json:"stars"`
+	Comment       string    `json:"comment"`
+	Type          string    `json:"type"`
+	IsApproved    bool      `json:"is_approved"`
+	IPAddress     string    `json:"ip_address"`
+	CreatedAt     time.Time `json:"created_at"`
 }
