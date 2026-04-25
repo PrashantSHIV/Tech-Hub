@@ -295,7 +295,7 @@ export default function DocDetail() {
             <div style={{ margin: 0, padding: 0, marginBottom: '40px' }}>
               <h1 style={{ 
                 fontFamily: "'Plus Jakarta Sans', sans-serif", 
-                fontSize: '20px',
+                fontSize: '35px',
                 fontWeight: '800',
                 lineHeight: '1.2', 
                 color: '#1a1a1a',
