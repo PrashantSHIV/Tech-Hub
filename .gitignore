@@ -8,6 +8,11 @@ backend/platform.db
 backend/gomodcache/
 backend/assets/avatars/
 backend/.gocache/
+backend/.env
+
+# Local environment secrets
+.env
+.env.local
 
 # General
 .DS_Store

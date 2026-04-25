@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"net/smtp"
+	"os"
 	"strings"
 	"time"
 
@@ -106,11 +108,15 @@ func RequestPasswordReset(c *gin.Context) {
 			VALUES ($1, $2, $3, $4)
 		`, uuid.New().String(), user.ID, otp, expiresAt)
 		if dbErr == nil {
-			middleware.LogAction(user.ID, "PASSWORD_RESET_REQUEST", fmt.Sprintf("OTP generated for %s: %s", user.Email, otp))
+			if emailErr := sendPasswordResetEmail(user.Email, otp); emailErr != nil {
+				middleware.LogAction(user.ID, "PASSWORD_RESET_EMAIL_FAILED", emailErr.Error())
+			} else {
+				middleware.LogAction(user.ID, "PASSWORD_RESET_REQUEST", "OTP generated and emailed to "+user.Email)
+			}
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "If the account exists, a reset OTP has been generated."})
+	c.JSON(http.StatusOK, gin.H{"message": "If the account exists, a reset OTP has been sent to its email address."})
 }
 
 func VerifyPasswordResetOTP(c *gin.Context) {
@@ -251,4 +257,55 @@ func generateOTPCode() string {
 	}
 
 	return string(buf)
+}
+
+func sendPasswordResetEmail(toEmail, otp string) error {
+	host := strings.TrimSpace(os.Getenv("SMTP_HOST"))
+	port := strings.TrimSpace(os.Getenv("SMTP_PORT"))
+	username := strings.TrimSpace(os.Getenv("SMTP_USER"))
+	password := strings.TrimSpace(os.Getenv("SMTP_PASS"))
+	from := strings.TrimSpace(os.Getenv("SMTP_FROM"))
+
+	if host == "" {
+		host = "smtp.gmail.com"
+	}
+	if port == "" {
+		port = "587"
+	}
+	if from == "" {
+		from = username
+	}
+	if username == "" || password == "" || from == "" {
+		return fmt.Errorf("SMTP_USER, SMTP_PASS, and SMTP_FROM must be configured")
+	}
+
+	envelopeFrom := extractEmailAddress(from)
+	auth := smtp.PlainAuth("", username, password, host)
+	address := host + ":" + port
+	subject := "Tech Hobby password reset OTP"
+	body := fmt.Sprintf(
+		"Your Tech Hobby password reset OTP is %s.\n\nThis code expires in 10 minutes. If you did not request this, you can ignore this email.\n",
+		otp,
+	)
+	message := strings.Join([]string{
+		"From: " + from,
+		"To: " + toEmail,
+		"Subject: " + subject,
+		"MIME-Version: 1.0",
+		"Content-Type: text/plain; charset=UTF-8",
+		"",
+		body,
+	}, "\r\n")
+
+	return smtp.SendMail(address, auth, envelopeFrom, []string{toEmail}, []byte(message))
+}
+
+func extractEmailAddress(value string) string {
+	start := strings.LastIndex(value, "<")
+	end := strings.LastIndex(value, ">")
+	if start >= 0 && end > start {
+		return strings.TrimSpace(value[start+1 : end])
+	}
+
+	return strings.TrimSpace(value)
 }

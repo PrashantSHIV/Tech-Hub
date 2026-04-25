@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"log"
+	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/user/doc-platform/database"
@@ -11,6 +14,7 @@ import (
 )
 
 func main() {
+	loadLocalEnv()
 	database.InitDB()
 
 	r := gin.Default()
@@ -89,5 +93,41 @@ func main() {
 	log.Println("Server starting on :8080")
 	if err := r.Run(":8080"); err != nil {
 		log.Fatal("Failed to start server:", err)
+	}
+}
+
+func loadLocalEnv() {
+	for _, path := range []string{".env", "backend/.env"} {
+		file, err := os.Open(path)
+		if err != nil {
+			continue
+		}
+
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+
+			key, value, ok := strings.Cut(line, "=")
+			if !ok {
+				continue
+			}
+
+			key = strings.TrimSpace(key)
+			value = strings.Trim(strings.TrimSpace(value), `"'`)
+			if key == "" || os.Getenv(key) != "" {
+				continue
+			}
+
+			if err := os.Setenv(key, value); err != nil {
+				log.Printf("Failed to load env var %s from %s: %v", key, path, err)
+			}
+		}
+
+		if err := file.Close(); err != nil {
+			log.Printf("Failed to close env file %s: %v", path, err)
+		}
 	}
 }

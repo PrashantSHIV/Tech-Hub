@@ -59,7 +59,7 @@ export default function Login() {
         json: { identifier },
       });
 
-      setNotice(`${data.message} Check the backend log for the OTP in development.`);
+      setNotice(`${data.message} Check your inbox for the OTP.`);
       setView('verify');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to request password reset');
