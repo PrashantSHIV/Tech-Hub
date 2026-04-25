@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { LayoutDashboard, Search } from 'lucide-react';
-import { getAuthSession } from '@/lib/auth';
+import { getAuthEventName, getAuthSession } from '@/lib/auth';
 
 type HeaderProps = {
 	centerContent?: ReactNode;
@@ -15,7 +15,16 @@ export default function Header({ centerContent }: HeaderProps) {
 	const isDashboard = pathname.startsWith('/admin');
 
 	useEffect(() => {
-		setIsLoggedIn(Boolean(getAuthSession()?.token));
+		const syncSession = () => setIsLoggedIn(Boolean(getAuthSession()?.token));
+
+		syncSession();
+		window.addEventListener(getAuthEventName(), syncSession);
+		window.addEventListener('storage', syncSession);
+
+		return () => {
+			window.removeEventListener(getAuthEventName(), syncSession);
+			window.removeEventListener('storage', syncSession);
+		};
 	}, [pathname]);
 
 	return (

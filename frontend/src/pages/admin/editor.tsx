@@ -84,6 +84,7 @@ export default function Editor() {
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackError, setFeedbackError] = useState('');
   const [error, setError] = useState('');
+  const [previewTab, setPreviewTab] = useState<'document' | 'messages'>('document');
 
   const isExistingDoc = typeof id === 'string';
   const isPreviewMode = isExistingDoc && mode !== 'edit';
@@ -570,16 +571,41 @@ export default function Editor() {
             </aside>
 
             <section className="admin-editor-reader-main">
-              <article className="admin-editor-preview admin-editor-preview-full">
-                <h1>{doc.title || 'Untitled document'}</h1>
-                {doc.description ? (
-                  <p className="admin-editor-preview-description">{doc.description}</p>
-                ) : null}
+              <div className="admin-editor-preview-tabs" role="tablist" aria-label="Document owner views">
+                <button
+                  type="button"
+                  className={previewTab === 'document' ? 'is-active' : ''}
+                  onClick={() => setPreviewTab('document')}
+                  role="tab"
+                  aria-selected={previewTab === 'document'}
+                >
+                  Public Preview
+                </button>
+                <button
+                  type="button"
+                  className={previewTab === 'messages' ? 'is-active' : ''}
+                  onClick={() => setPreviewTab('messages')}
+                  role="tab"
+                  aria-selected={previewTab === 'messages'}
+                >
+                  Messages
+                </button>
+              </div>
 
-                {renderPreviewContent()}
-              </article>
+              {previewTab === 'document' ? (
+                <article className="admin-editor-preview admin-editor-preview-full">
+                  <h1>{doc.title || 'Untitled document'}</h1>
+                  {doc.description ? (
+                    <p className="admin-editor-preview-description">{doc.description}</p>
+                  ) : null}
 
-              {feedbackPanel}
+                  {renderPreviewContent()}
+                </article>
+              ) : (
+                <div className="admin-editor-messages-view">
+                  {feedbackPanel}
+                </div>
+              )}
             </section>
           </section>
         ) : (

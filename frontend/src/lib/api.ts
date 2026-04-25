@@ -1,3 +1,5 @@
+import { clearAuthSession } from './auth';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8080';
 
 type ApiRequestOptions = RequestInit & {
@@ -27,6 +29,10 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   const data = raw ? tryParseJSON(raw) : null;
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearAuthSession();
+    }
+
     const errorMessage =
       typeof data === 'object' && data && 'error' in data && typeof data.error === 'string'
         ? data.error

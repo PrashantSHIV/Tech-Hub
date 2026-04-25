@@ -1766,7 +1766,47 @@ body {
 }
 
 .admin-editor-preview-full {
-    max-width: 760px;
+    width: 100%;
+    max-width: none;
+}
+
+.admin-editor-preview-tabs {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 28px;
+    border: 1px solid var(--ae-border);
+}
+
+.admin-editor-preview-tabs button {
+    min-height: 40px;
+    border: none;
+    border-right: 1px solid var(--ae-border);
+    background: #ffffff;
+    color: var(--ae-muted);
+    padding: 0 16px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.admin-editor-preview-tabs button:last-child {
+    border-right: none;
+}
+
+.admin-editor-preview-tabs button.is-active {
+    background: #1f1f1f;
+    color: #ffffff;
+}
+
+.admin-editor-messages-view .admin-editor-feedback-panel {
+    max-width: none;
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
 }
 
 .admin-editor-preview-meta,
@@ -2249,6 +2289,7 @@ body {
 }
 
 .search-card {
+    align-items: stretch;
     background: transparent;
     color: inherit;
     text-decoration: none;
