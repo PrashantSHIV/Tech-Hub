@@ -44,12 +44,12 @@ export default function DocDetail() {
   const fetchDocData = async () => {
     setLoading(true);
     try {
-      const resDoc = await fetch(`http://localhost:8080/api/docs/${id}`);
+      const resDoc = await fetch(`${API_BASE_URL}/api/docs/${id}`);
       if (!resDoc.ok) throw new Error("Doc not found");
       const docData = (await resDoc.json()) as PublicDocument;
       setDoc(docData);
 
-      const resComments = await fetch(`http://localhost:8080/api/docs/${id}/comments`);
+      const resComments = await fetch(`${API_BASE_URL}/api/docs/${id}/comments`);
       if (resComments.ok) {
         const commentsData = await resComments.json();
         setComments(commentsData || []);
@@ -71,7 +71,7 @@ export default function DocDetail() {
     };
 
     try {
-      const res = await fetch('http://localhost:8080/api/interactions', {
+      const res = await fetch(`${API_BASE_URL}/api/interactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

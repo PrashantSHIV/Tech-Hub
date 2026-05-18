@@ -57,7 +57,7 @@ export default function SearchPage() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await fetch('http://localhost:8080/api/categories');
+        const response = await fetch(`${API_BASE_URL}/api/categories`);
         if (response.ok) {
           const data = await response.json();
           setCategories(['All', ...(data || [])]);
@@ -82,7 +82,7 @@ export default function SearchPage() {
       try {
         const category = activeCategory === 'All' ? '' : activeCategory;
         const response = await fetch(
-          `http://localhost:8080/api/docs?page=${currentPage}&limit=6&category=${category}&q=${search}`
+          `${API_BASE_URL}/api/docs?page=${currentPage}&limit=6&category=${category}&q=${search}`
         );
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
